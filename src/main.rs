@@ -7,30 +7,41 @@ const COMMAND_EXIT: &str = "exit";
 const COMMAND_TYPE: &str = "type";
 const COMMAND_ECHO: &str = "echo";
 
+const BUILTINS: [&str; 3] = [COMMAND_EXIT, COMMAND_TYPE, COMMAND_ECHO];
+
+fn is_builtin(cmd: &str) -> bool {
+    BUILTINS.contains(&cmd)
+}
+
 fn main() {
     loop {
         print!("$ ");
         io::stdout().flush().unwrap();
 
         let mut user_command = String::new();
-        io::stdin().read_line(&mut user_command).unwrap();
+        // EOF 时退出循环
+        if io::stdin().read_line(&mut user_command).is_err() {
+            break;
+        }
 
-        match user_command
-            .split_whitespace()
-            .collect::<Vec<&str>>()
-            .as_slice()
-        {
+        let parts: Vec<&str> = user_command.split_whitespace().collect();
+        match parts.as_slice() {
+            [] => continue, // 空行忽略
             [COMMAND_EXIT] => break,
-            [COMMAND_ECHO, arg @ ..] => println!("{}", arg.join(" ")),
-            [
-                COMMAND_TYPE,
-                arg @ (COMMAND_ECHO | COMMAND_EXIT | COMMAND_TYPE),
-            ] => println!("{arg} is a shell builtin"),
+            [COMMAND_ECHO, args @ ..] => println!("{}", args.join(" ")),
             [COMMAND_TYPE] => println!("type: missing operand"),
-            [COMMAND_TYPE, cmd] if let Some(path) = find_cmd_in_path(cmd) => {
-                println!("{} is {}", cmd, path.to_string_lossy())
+            [COMMAND_TYPE, args @ ..] => {
+                for &arg in args {
+                    if is_builtin(arg) {
+                        println!("{} is a shell builtin", arg);
+                    } else if let Some(path) = find_cmd_in_path(arg) {
+                        println!("{} is {}", arg, path.to_string_lossy());
+                    } else {
+                        println!("{}: not found", arg);
+                    }
+                }
             }
-            _ => println!("{}: command not found", user_command.trim()),
+            [cmd, ..] => println!("{}: command not found", cmd),
         }
     }
 }
