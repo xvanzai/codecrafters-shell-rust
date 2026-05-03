@@ -1,78 +1,18 @@
-use std::fs;
-use std::io::{self, Write};
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+mod shell;
+mod context;
+mod error;
+mod parser;
+mod resolver;
+mod builtins;
 
-const COMMAND_EXIT: &str = "exit";
-const COMMAND_TYPE: &str = "type";
-const COMMAND_ECHO: &str = "echo";
+use shell::Shell;
+use error::ShellError;
 
-const BUILTINS: [&str; 3] = [COMMAND_EXIT, COMMAND_TYPE, COMMAND_ECHO];
-
-fn is_builtin(cmd: &str) -> bool {
-    BUILTINS.contains(&cmd)
-}
-
-fn main() {
-    loop {
-        print!("$ ");
-        io::stdout().flush().unwrap();
-
-        let mut user_command = String::new();
-        // EOF 时退出循环
-        if io::stdin().read_line(&mut user_command).is_err() {
-            break;
-        }
-
-        let parts: Vec<&str> = user_command.split_whitespace().collect();
-        match parts.as_slice() {
-            [] => continue, // 空行忽略
-            [COMMAND_EXIT] => break,
-            [COMMAND_ECHO, args @ ..] => println!("{}", args.join(" ")),
-            [COMMAND_TYPE] => println!("type: missing operand"),
-            [COMMAND_TYPE, args @ ..] => {
-                for &arg in args {
-                    if is_builtin(arg) {
-                        println!("{} is a shell builtin", arg);
-                    } else if let Some(path) = find_cmd_in_path(arg) {
-                        println!("{} is {}", arg, path.to_string_lossy());
-                    } else {
-                        println!("{}: not found", arg);
-                    }
-                }
-            }
-            [cmd, args @ ..] => {
-                // 直接执行，让 Rust 处理 PATH 查找
-                match Command::new(cmd).args(args).status() {
-                    Ok(_) => { /* 命令执行完毕，继续循环 */ }
-                    Err(e) => {
-                        if e.kind() == std::io::ErrorKind::NotFound {
-                            println!("{}: command not found", cmd);
-                        } else {
-                            eprintln!("Failed to execute '{}': {}", cmd, e);
-                        }
-                    }
-                }
-            }
-        }
+fn main() -> Result<(), ShellError> {
+    let mut shell = Shell::new();
+    if let Err(e) = shell.run() {
+        eprintln!("Shell exited with error: {}", e);
+        std::process::exit(1);
     }
-}
-
-fn find_cmd_in_path(cmd: &str) -> Option<PathBuf> {
-    let path = std::env::var("PATH").ok()?;
-    path.split(':')
-        .map(Path::new)
-        .filter(|dir| dir.is_dir())
-        .filter_map(|dir| fs::read_dir(dir).ok())
-        .flat_map(|entries| entries.filter_map(Result::ok))
-        .find(|entry| {
-            entry.file_name() == cmd
-                && entry
-                    .metadata()
-                    .ok()
-                    .map(|meta| meta.is_file() && (meta.permissions().mode() & 0o111 != 0))
-                    .unwrap_or(false)
-        })
-        .map(|entry| entry.path())
+    Ok(())
 }
