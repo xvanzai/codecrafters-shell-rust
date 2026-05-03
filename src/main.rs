@@ -1,5 +1,7 @@
-#[allow(unused_imports)]
+use std::fs;
 use std::io::{self, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 const COMMAND_EXIT: &str = "exit";
 const COMMAND_TYPE: &str = "type";
@@ -20,9 +22,34 @@ fn main() {
         {
             [COMMAND_EXIT] => break,
             [COMMAND_ECHO, arg @ ..] => println!("{}", arg.join(" ")),
-            [COMMAND_TYPE, arg @ (COMMAND_ECHO | COMMAND_EXIT | COMMAND_TYPE)] => println!("{arg} is a shell builtin"),
-            [COMMAND_TYPE, arg @ ..] => println!("{}: not found", arg[0]), // 当使用 type 不添加任何参数时 会匹配到该分支 导致发生panic：index out of bounds: the len is 0 but the index is 0
+            [
+                COMMAND_TYPE,
+                arg @ (COMMAND_ECHO | COMMAND_EXIT | COMMAND_TYPE),
+            ] => println!("{arg} is a shell builtin"),
+            [COMMAND_TYPE] => println!("type: missing operand"),
+            [COMMAND_TYPE, arg @ ..] => println!("{}: not found", arg[0]),
+            [cmd, ..] if let Some(path) = find_cmd_in_path(cmd) => {
+                println!("{} is {}", cmd, path.to_string_lossy())
+            }
             _ => println!("{}: command not found", user_command.trim()),
         }
     }
+}
+
+fn find_cmd_in_path(cmd: &str) -> Option<PathBuf> {
+    let path = std::env::var("PATH").ok()?;
+    path.split(':')
+        .map(Path::new)
+        .filter(|dir| dir.is_dir())
+        .filter_map(|dir| fs::read_dir(dir).ok())
+        .flat_map(|entries| entries.filter_map(Result::ok))
+        .find(|entry| {
+            entry.file_name() == cmd
+                && entry
+                    .metadata()
+                    .ok()
+                    .map(|meta| meta.is_file() && (meta.permissions().mode() & 0o111 != 0))
+                    .unwrap_or(false)
+        })
+        .map(|entry| entry.path())
 }
