@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const COMMAND_EXIT: &str = "exit";
 const COMMAND_TYPE: &str = "type";
@@ -41,7 +42,21 @@ fn main() {
                     }
                 }
             }
-            [cmd, ..] => println!("{}: command not found", cmd),
+            [cmd, args @ ..] => {
+                // 处理外部命令
+                if let Some(path) = resolve_command_path(cmd) {
+                    let status = Command::new(&path)
+                        .args(args)
+                        .status()
+                        .expect("Failed to execute command");
+                    if !status.success() {
+                        // 命令执行失败（非零退出码）
+                        std::process::exit(status.code().unwrap_or(1));
+                    }
+                } else {
+                    println!("{}: command not found", cmd);
+                }
+            }
         }
     }
 }
@@ -62,4 +77,24 @@ fn find_cmd_in_path(cmd: &str) -> Option<PathBuf> {
                     .unwrap_or(false)
         })
         .map(|entry| entry.path())
+}
+
+fn resolve_command_path(cmd: &str) -> Option<PathBuf> {
+    if cmd.contains('/') {
+        let path = Path::new(cmd);
+        if path.is_file() && is_executable(path) {
+            Some(path.to_path_buf())
+        } else {
+            None
+        }
+    } else {
+        find_cmd_in_path(cmd)
+    }
+}
+
+fn is_executable(path: &Path) -> bool {
+    fs::metadata(path)
+        .ok()
+        .map(|meta| meta.is_file() && (meta.permissions().mode() & 0o111 != 0))
+        .unwrap_or(false)
 }
