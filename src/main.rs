@@ -12,12 +12,9 @@ fn main() {
         io::stdin().read_line(&mut user_command).unwrap();
 
         match user_command.trim() {
-            COMMAND_EXIT => {
-                break;
-            }
-            _ => {
-                println!("{}: command not found", user_command.trim())
-            }
+            COMMAND_EXIT => break,
+            cmd if cmd.starts_with("echo") => println!("{}", &cmd[5..]),
+            _ => println!("{}: command not found", user_command.trim()),
         }
     }
 }
