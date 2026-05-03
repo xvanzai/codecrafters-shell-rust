@@ -27,8 +27,7 @@ fn main() {
                 arg @ (COMMAND_ECHO | COMMAND_EXIT | COMMAND_TYPE),
             ] => println!("{arg} is a shell builtin"),
             [COMMAND_TYPE] => println!("type: missing operand"),
-            [COMMAND_TYPE, arg @ ..] => println!("{}: not found", arg[0]),
-            [cmd, ..] if let Some(path) = find_cmd_in_path(cmd) => {
+            [COMMAND_TYPE, cmd] if let Some(path) = find_cmd_in_path(cmd) => {
                 println!("{} is {}", cmd, path.to_string_lossy())
             }
             _ => println!("{}: command not found", user_command.trim()),
