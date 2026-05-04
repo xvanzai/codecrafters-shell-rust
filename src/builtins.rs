@@ -18,9 +18,11 @@ pub mod echo;
 #[path = "builtins/type.rs"]
 pub mod type_cmd;   // 避免与关键字冲突，使用 type_cmd 作为模块名
 pub mod pwd;
+pub mod cd;
 
 // 重导出常用类型，方便外部 use
 pub use exit::ExitBuiltin;
 pub use echo::EchoBuiltin;
 pub use type_cmd::TypeBuiltin;
 pub use pwd::PwdBuiltin;
+pub use cd::CdBuiltin;
