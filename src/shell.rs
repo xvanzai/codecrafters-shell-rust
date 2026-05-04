@@ -22,6 +22,7 @@ impl Shell {
             ("exit", Box::new(builtins::ExitBuiltin)),
             ("echo", Box::new(builtins::EchoBuiltin)),
             ("type", Box::new(builtins::TypeBuiltin)),
+            ("pwd", Box::new(builtins::PwdBuiltin)),
         ];
 
         for (name, builtin) in cmd_list {
