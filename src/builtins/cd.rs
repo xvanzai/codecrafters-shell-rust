@@ -25,7 +25,7 @@ impl Builtin for CdBuiltin {
         let path = Path::new(&target);
         if !path.is_dir() {
             return Err(ShellError::BuiltinError(format!(
-                "cd: {}: No such directory",
+                "cd: {}: No such file or directory",
                 target
             )));
         } else {
