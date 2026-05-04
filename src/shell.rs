@@ -22,6 +22,7 @@ impl Shell {
             ("exit", Box::new(builtins::ExitBuiltin)),
             ("echo", Box::new(builtins::EchoBuiltin)),
             ("type", Box::new(builtins::TypeBuiltin)),
+            ("pwd", Box::new(builtins::PwdBuiltin)),
         ];
 
         for (name, builtin) in cmd_list {
@@ -75,7 +76,10 @@ impl Shell {
             .resolve_cmd(&cmd.name)
             .ok_or_else(|| ShellError::CommandNotFound(cmd.name.clone()))?;
 
-        let status = Command::new(&path)
+        let cmd_name = path.file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| ShellError::CommandNotFound(cmd.name.clone()))?;
+        let status = Command::new(cmd_name)
             .args(&cmd.args)
             .status()
             .map_err(|e| {
