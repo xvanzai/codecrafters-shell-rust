@@ -58,8 +58,11 @@ impl Shell {
                 }
             };
 
-            if let Err(e) = self.execute_command(cmd) {
-                eprintln!("{}", e);
+            let result = self.execute_command(cmd);
+            match result {
+                Ok(ShouldExit::Continue) => {}
+                Ok(ShouldExit::Exit) => break,
+                Err(e) => eprintln!("{}", e),
             }
         }
         Ok(())
@@ -72,11 +75,13 @@ impl Shell {
         }
 
         // 外部命令
-        let path = self.context
+        let path = self
+            .context
             .resolve_cmd(&cmd.name)
             .ok_or_else(|| ShellError::CommandNotFound(cmd.name.clone()))?;
 
-        let cmd_name = path.file_name()
+        let cmd_name = path
+            .file_name()
             .and_then(|s| s.to_str())
             .ok_or_else(|| ShellError::CommandNotFound(cmd.name.clone()))?;
         let status = Command::new(cmd_name)
