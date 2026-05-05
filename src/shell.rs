@@ -6,7 +6,7 @@ use std::process::Command;
 use crate::builtins::{self, Builtin, ShouldExit};
 use crate::context::ShellContext;
 use crate::error::ShellError;
-use crate::parser::{self, ParsedCommand};
+use crate::parser::{self, ParsedCommand, Redirection};
 
 pub struct Shell {
     builtins: HashMap<String, Box<dyn Builtin>>,
@@ -71,26 +71,46 @@ impl Shell {
     }
 
     fn execute_command(&mut self, cmd: ParsedCommand) -> Result<ShouldExit, ShellError> {
-        let ParsedCommand { name, args, redirection } = cmd;
-        let mut redirect_file = None;
+        let ParsedCommand {
+            name,
+            args,
+            redirects,
+        } = cmd;
 
-        if let Some(redir) = redirection {
-            match redir {
-                parser::Redirection::Overwrite(filename) => {
-                    let f = File::create(filename)?;
-                    redirect_file = Some(f);
-                }
-            }
-        }
+        // 1. 按流分类重定向
+        let stdout_redirs: Vec<_> = redirects
+            .iter()
+            .filter(|r| matches!(r, Redirection::Overwrite(_)))
+            .collect();
+        let stderr_redirs: Vec<_> = redirects
+            .iter()
+            .filter(|r| matches!(r, Redirection::StderrOverwrite(_)))
+            .collect();
 
-        let output: &mut dyn Write = match &mut redirect_file {
+        // 2. 对每个流，遍历重定向产生副作用，只保留最后一个文件句柄
+        let mut final_stdout = open_redirect_chain(&stdout_redirs)?;
+        let mut final_stderr: Option<File> = open_redirect_chain(&stderr_redirs)?;
+
+        // 3. 构造动态输出 target（避免 unwrap）
+        let output: &mut dyn Write = match &mut final_stdout {
             Some(f) => f,
             None => &mut io::stdout(),
+        };
+        let error_output: &mut dyn Write = match &mut final_stderr {
+            Some(f) => f,
+            None => &mut io::stderr(),
         };
 
         // 借用内建命令表（不可变）和上下文（可变）互不冲突
         if let Some(builtin) = self.builtins.get(&name) {
-            return builtin.execute(&args, &mut self.context, output);
+            match builtin.execute(&args, &mut self.context, output) {
+                Ok(should_exit) => return Ok(should_exit),
+                Err(e) => {
+                    // 将错误消息写入 builtin 自己的 stderr 流
+                    writeln!(error_output, "{}", e).unwrap();
+                    return Ok(ShouldExit::Continue);
+                },
+            }
         }
 
         // 外部命令
@@ -107,8 +127,12 @@ impl Shell {
         let mut command = Command::new(cmd_name);
         command.args(&args);
 
-        if let Some(f) = redirect_file.take() {
-            command.stdout(f);
+        // 将文件句柄转移给 Command（注意：此时 final_stdout/stderr 已不再被借用）
+        if let Some(file) = final_stdout.take() {
+            command.stdout(file);
+        }
+        if let Some(file) = final_stderr.take() {
+            command.stderr(file);
         }
 
         let _status = command.status().map_err(|e| {
@@ -124,5 +148,27 @@ impl Shell {
         // }
 
         Ok(ShouldExit::Continue)
+    }
+}
+
+/// 遍历给定流的重定向列表，依次打开/创建文件（副作用），
+/// 仅返回最后一个打开的文件句柄。
+fn open_redirect_chain(redirs: &[&Redirection]) -> Result<Option<File>, ShellError> {
+    let mut final_file = None;
+    for redir in redirs {
+        let file = open_redirect_file(redir)?;
+        final_file = Some(file); // 旧的自动 drop
+    }
+    Ok(final_file)
+}
+
+/// 根据重定向变体打开文件
+fn open_redirect_file(redir: &Redirection) -> Result<File, ShellError> {
+    match redir {
+        Redirection::Overwrite(filename) | Redirection::StderrOverwrite(filename) => {
+            File::create(filename).map_err(|e| {
+                ShellError::BuiltinError(format!("failed to open {}: {}", filename, e))
+            })
+        }
     }
 }

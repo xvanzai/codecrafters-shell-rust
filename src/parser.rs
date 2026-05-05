@@ -4,6 +4,8 @@ use crate::error::ShellError;
 pub enum Redirection {
     /// 输出重定向到文件（截断）
     Overwrite(String),
+    /// 标准错误重定向到文件（截断）
+    StderrOverwrite(String),
     // 未来可扩展 Append(String)
 }
 
@@ -12,7 +14,7 @@ pub enum Redirection {
 pub struct ParsedCommand {
     pub name: String,
     pub args: Vec<String>,
-    pub redirection: Option<Redirection>,
+    pub redirects: Vec<Redirection>,
 }
 
 pub fn parse(input: &str) -> Result<ParsedCommand, ShellError> {
@@ -28,13 +30,10 @@ pub fn parse(input: &str) -> Result<ParsedCommand, ShellError> {
         return Err(ShellError::ParseError("missing command".to_string()));
     }
 
-    // 只保留最后一个重定向
-    let redirection = redirections.last().cloned();
-
     Ok(ParsedCommand {
         name: tokens.remove(0),
         args: tokens,
-        redirection,
+        redirects: redirections,
     })
 }
 
@@ -128,23 +127,17 @@ fn extract_redirects(tokens: &mut Vec<String>) -> Result<Vec<Redirection>, Shell
     // 循环中 tokens 长度可能变化，使用 while 并检查边界
     while i < tokens.len() {
         let token = &tokens[i];
-        let redir_type = match token.as_str() {
+        let redir_type: Option<fn(String) -> Redirection> = match token.as_str() {
             ">" | "1>" => Some(Redirection::Overwrite),
+            "2>" => Some(Redirection::StderrOverwrite),
             _ => None,
         };
 
-        if let Some(redirection) = redir_type {
+        if let Some(constructor) = redir_type {
             // 操作符后必须有文件名
-            if i + 1 >= tokens.len() {
-                return Err(ShellError::ParseError(format!(
-                    "missing filename for redirection '{}'",
-                    token
-                )));
-            }
-            let filename = tokens[i + 1].clone();
-            // 构造对应的重定向
-            redirects.push(redirection(filename));
-            // 移除操作符和文件名（注意移除顺序：先移除后面的，再移除前面的）
+            let filename = next_token_as_filename(tokens, i)?;
+            redirects.push(constructor(filename));
+            // 移除操作符和文件名
             tokens.drain(i..=i + 1);
             // i 不变，因为当前位置已经被下一个 token 占据（若存在）
         } else {
@@ -152,6 +145,18 @@ fn extract_redirects(tokens: &mut Vec<String>) -> Result<Vec<Redirection>, Shell
         }
     }
     Ok(redirects)
+}
+
+/// 提取当前操作符后的文件名 token。
+/// 若不存在则返回错误。
+fn next_token_as_filename(tokens: &[String], op_index: usize) -> Result<String, ShellError> {
+    if op_index + 1 >= tokens.len() {
+        return Err(ShellError::ParseError(format!(
+            "missing filename for '{}'",
+            tokens[op_index]
+        )));
+    }
+    Ok(tokens[op_index + 1].clone())
 }
 
 #[cfg(test)]
