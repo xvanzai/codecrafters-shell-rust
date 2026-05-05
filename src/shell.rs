@@ -111,7 +111,7 @@ impl Shell {
             command.stdout(f);
         }
 
-        let status = command.status().map_err(|e| {
+        let _status = command.status().map_err(|e| {
             if e.kind() == io::ErrorKind::NotFound {
                 ShellError::CommandNotFound(name.clone())
             } else {
@@ -119,9 +119,9 @@ impl Shell {
             }
         })?;
 
-        if !status.success() {
-            eprintln!("{}: exited with code {}", name, status);
-        }
+        // if !status.success() {
+        //     eprintln!("{}: exited with code {}", name, status);
+        // }
 
         Ok(ShouldExit::Continue)
     }
