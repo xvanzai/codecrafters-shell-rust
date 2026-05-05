@@ -55,16 +55,15 @@ impl Shell {
             let cmd = match parser::parse(trimmed) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("{}", e);
+                    eprintln!("{}", e);   // 语法错误直接输出到全局 stderr
                     continue;
                 }
             };
 
-            let result = self.execute_command(cmd);
-            match result {
+            match self.execute_command(cmd) {
                 Ok(ShouldExit::Continue) => {}
                 Ok(ShouldExit::Exit) => break,
-                Err(e) => eprintln!("{}", e),
+                Err(e) => eprintln!("{}", e),   // 其他错误
             }
         }
         Ok(())
@@ -77,7 +76,7 @@ impl Shell {
             redirects,
         } = cmd;
 
-        // 1. 按流分类重定向
+        // 1. 分离 stdout / stderr 重定向
         let stdout_redirs: Vec<_> = redirects
             .iter()
             .filter(|r| matches!(r, Redirection::Overwrite(_) | Redirection::Append(_)))
@@ -87,11 +86,11 @@ impl Shell {
             .filter(|r| matches!(r, Redirection::StderrOverwrite(_) | Redirection::StderrAppend(_)))
             .collect();
 
-        // 2. 对每个流，遍历重定向产生副作用，只保留最后一个文件句柄
+        // 2. 产生副作用并获取最终句柄
         let mut final_stdout = open_redirect_chain(&stdout_redirs)?;
-        let mut final_stderr: Option<File> = open_redirect_chain(&stderr_redirs)?;
+        let mut final_stderr = open_redirect_chain(&stderr_redirs)?;
 
-        // 3. 构造动态输出 target（避免 unwrap）
+        // 3. 动态分发 writer
         let output: &mut dyn Write = match &mut final_stdout {
             Some(f) => f,
             None => &mut io::stdout(),
@@ -101,19 +100,20 @@ impl Shell {
             None => &mut io::stderr(),
         };
 
-        // 借用内建命令表（不可变）和上下文（可变）互不冲突
+        // 4. 内建命令
         if let Some(builtin) = self.builtins.get(&name) {
-            match builtin.execute(&args, &mut self.context, output) {
-                Ok(should_exit) => return Ok(should_exit),
+            return match builtin.execute(&args, &mut self.context, output) {
+                Ok(exit_code) => Ok(exit_code),
                 Err(e) => {
-                    // 将错误消息写入 builtin 自己的 stderr 流
-                    writeln!(error_output, "{}", e).unwrap();
-                    return Ok(ShouldExit::Continue);
+                    // 内建命令的错误写入其 stderr 流（已重定向或终端）
+                    // 忽略写入错误（文件可能被删除等）
+                    let _ = writeln!(error_output, "{}", e);
+                    Ok(ShouldExit::Continue)
                 }
-            }
+            };
         }
 
-        // 外部命令
+        // 5. 外部命令
         let path = self
             .context
             .resolve_cmd(&name)
@@ -135,7 +135,7 @@ impl Shell {
             command.stderr(file);
         }
 
-        let _status = command.status().map_err(|e| {
+        command.status().map_err(|e| {
             if e.kind() == io::ErrorKind::NotFound {
                 ShellError::CommandNotFound(name.clone())
             } else {
@@ -143,37 +143,37 @@ impl Shell {
             }
         })?;
 
-        // if !status.success() {
-        //     eprintln!("{}: exited with code {}", name, status);
-        // }
-
         Ok(ShouldExit::Continue)
     }
 }
 
-/// 遍历给定流的重定向列表，依次打开/创建文件（副作用），
-/// 仅返回最后一个打开的文件句柄。
+// ── 辅助函数 ────────────────────────────────────────────
+
+/// 依次打开/创建重定向文件（产生截断/追加副作用），返回最后一个句柄。
 fn open_redirect_chain(redirs: &[&Redirection]) -> Result<Option<File>, ShellError> {
-    let mut final_file = None;
+    let mut last = None;
     for redir in redirs {
-        let file = open_redirect_file(redir)?;
-        final_file = Some(file); // 旧的自动 drop
+        last = Some(open_redirect_file(redir)?);
     }
-    Ok(final_file)
+    Ok(last)
 }
 
-/// 根据重定向变体打开文件
 fn open_redirect_file(redir: &Redirection) -> Result<File, ShellError> {
-    match redir {
-        Redirection::Overwrite(filename) | Redirection::StderrOverwrite(filename) => {
-            File::create(filename).map_err(|e| {
-                ShellError::BuiltinError(format!("failed to open {}: {}", filename, e))
-            })
-        }
-        Redirection::Append(filename) | Redirection::StderrAppend(filename) => OpenOptions::new()
+    let (filename, append) = match redir {
+        Redirection::Overwrite(f) | Redirection::StderrOverwrite(f) => (f, false),
+        Redirection::Append(f) | Redirection::StderrAppend(f) => (f, true),
+    };
+
+    let file = if append {
+        OpenOptions::new()
             .create(true)
             .append(true)
             .open(filename)
-            .map_err(|e| ShellError::BuiltinError(format!("failed to open {}: {}", filename, e))),
-    }
+    } else {
+        File::create(filename)
+    };
+
+    file.map_err(|e| {
+        ShellError::BuiltinError(format!("failed to open {}: {}", filename, e))
+    })
 }
