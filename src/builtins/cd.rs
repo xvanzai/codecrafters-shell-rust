@@ -13,6 +13,7 @@ impl Builtin for CdBuiltin {
         &self,
         args: &[String],
         context: &mut ShellContext,
+        _writer: &mut dyn std::io::Write,
     ) -> Result<ShouldExit, ShellError> {
         // 1. 获取 HOME，若未设置则回退至根目录
         let home = context

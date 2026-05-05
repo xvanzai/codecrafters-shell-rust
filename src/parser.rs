@@ -1,20 +1,41 @@
 use crate::error::ShellError;
 
+#[derive(Debug, Clone)]
+pub enum Redirection {
+    /// 输出重定向到文件（截断）
+    Overwrite(String),
+    // 未来可扩展 Append(String)
+}
+
 /// 解析后的命令
 #[derive(Debug, Clone)]
 pub struct ParsedCommand {
     pub name: String,
     pub args: Vec<String>,
+    pub redirection: Option<Redirection>,
 }
 
 pub fn parse(input: &str) -> Result<ParsedCommand, ShellError> {
-    let tokens = tokenize(input)?;
+    let mut tokens = tokenize(input)?;
     if tokens.is_empty() {
         return Err(ShellError::ParseError("empty command".to_string()));
     }
-    let name = tokens[0].clone();
-    let args = tokens[1..].to_vec();
-    Ok(ParsedCommand { name, args })
+
+    // 提取重定向（目前仅支持 >），并移除相关 token
+    let redirections = extract_redirects(&mut tokens)?;
+
+    if tokens.is_empty() {
+        return Err(ShellError::ParseError("missing command".to_string()));
+    }
+
+    // 只保留最后一个重定向
+    let redirection = redirections.last().cloned();
+
+    Ok(ParsedCommand {
+        name: tokens.remove(0),
+        args: tokens,
+        redirection,
+    })
 }
 
 fn tokenize(input: &str) -> Result<Vec<String>, ShellError> {
@@ -98,6 +119,39 @@ fn tokenize(input: &str) -> Result<Vec<String>, ShellError> {
     }
 
     Ok(tokens)
+}
+
+/// 提取所有重定向，从 tokens 中移除相关 token 对，返回重定向列表（保持出现顺序）。
+fn extract_redirects(tokens: &mut Vec<String>) -> Result<Vec<Redirection>, ShellError> {
+    let mut redirects = Vec::new();
+    let mut i = 0;
+    // 循环中 tokens 长度可能变化，使用 while 并检查边界
+    while i < tokens.len() {
+        let token = &tokens[i];
+        let redir_type = match token.as_str() {
+            ">" | "1>" => Some(Redirection::Overwrite),
+            _ => None,
+        };
+
+        if let Some(redirection) = redir_type {
+            // 操作符后必须有文件名
+            if i + 1 >= tokens.len() {
+                return Err(ShellError::ParseError(format!(
+                    "missing filename for redirection '{}'",
+                    token
+                )));
+            }
+            let filename = tokens[i + 1].clone();
+            // 构造对应的重定向
+            redirects.push(redirection(filename));
+            // 移除操作符和文件名（注意移除顺序：先移除后面的，再移除前面的）
+            tokens.drain(i..=i + 1);
+            // i 不变，因为当前位置已经被下一个 token 占据（若存在）
+        } else {
+            i += 1;
+        }
+    }
+    Ok(redirects)
 }
 
 #[cfg(test)]

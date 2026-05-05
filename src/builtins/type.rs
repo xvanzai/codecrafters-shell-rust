@@ -5,17 +5,17 @@ use crate::context::ShellContext;
 pub struct TypeBuiltin;
 
 impl Builtin for TypeBuiltin {
-    fn execute(&self, args: &[String], context: &mut ShellContext) -> Result<ShouldExit, ShellError> {
+    fn execute(&self, args: &[String], context: &mut ShellContext, writer: &mut dyn std::io::Write) -> Result<ShouldExit, ShellError> {
         if args.is_empty() {
             return Err(ShellError::BuiltinError("type: missing operand".to_string()));
         }
         for cmd in args {
             if context.builtin_names.contains(cmd) {
-                println!("{} is a shell builtin", cmd);
+                writeln!(writer, "{} is a shell builtin", cmd).unwrap();
             } else if let Some(path) = context.resolve_cmd(cmd) {
-                println!("{} is {}", cmd, path.display());
+                writeln!(writer, "{} is {}", cmd, path.display()).unwrap();
             } else {
-                println!("{}: not found", cmd);
+                writeln!(writer, "{}: not found", cmd).unwrap();
             }
         }
         Ok(ShouldExit::Continue)

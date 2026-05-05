@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::{self, Write};
 use std::process::Command;
 
@@ -70,34 +71,56 @@ impl Shell {
     }
 
     fn execute_command(&mut self, cmd: ParsedCommand) -> Result<ShouldExit, ShellError> {
+        let ParsedCommand { name, args, redirection } = cmd;
+        let mut redirect_file = None;
+
+        if let Some(redir) = redirection {
+            match redir {
+                parser::Redirection::Overwrite(filename) => {
+                    let f = File::create(filename)?;
+                    redirect_file = Some(f);
+                }
+            }
+        }
+
+        let output: &mut dyn Write = match &mut redirect_file {
+            Some(f) => f,
+            None => &mut io::stdout(),
+        };
+
         // 借用内建命令表（不可变）和上下文（可变）互不冲突
-        if let Some(builtin) = self.builtins.get(&cmd.name) {
-            return builtin.execute(&cmd.args, &mut self.context);
+        if let Some(builtin) = self.builtins.get(&name) {
+            return builtin.execute(&args, &mut self.context, output);
         }
 
         // 外部命令
         let path = self
             .context
-            .resolve_cmd(&cmd.name)
-            .ok_or_else(|| ShellError::CommandNotFound(cmd.name.clone()))?;
+            .resolve_cmd(&name)
+            .ok_or_else(|| ShellError::CommandNotFound(name.clone()))?;
 
         let cmd_name = path
             .file_name()
             .and_then(|s| s.to_str())
-            .ok_or_else(|| ShellError::CommandNotFound(cmd.name.clone()))?;
-        let status = Command::new(cmd_name)
-            .args(&cmd.args)
-            .status()
-            .map_err(|e| {
-                if e.kind() == io::ErrorKind::NotFound {
-                    ShellError::CommandNotFound(cmd.name.clone())
-                } else {
-                    ShellError::Io(e)
-                }
-            })?;
+            .ok_or_else(|| ShellError::CommandNotFound(name.clone()))?;
+
+        let mut command = Command::new(cmd_name);
+        command.args(&args);
+
+        if let Some(f) = redirect_file.take() {
+            command.stdout(f);
+        }
+
+        let status = command.status().map_err(|e| {
+            if e.kind() == io::ErrorKind::NotFound {
+                ShellError::CommandNotFound(name.clone())
+            } else {
+                ShellError::Io(e)
+            }
+        })?;
 
         if !status.success() {
-            eprintln!("{}: exited with code {}", cmd.name, status);
+            eprintln!("{}: exited with code {}", name, status);
         }
 
         Ok(ShouldExit::Continue)

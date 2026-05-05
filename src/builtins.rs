@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::error::ShellError;
 use crate::context::ShellContext;
 
@@ -9,7 +11,7 @@ pub enum ShouldExit {
 
 /// 内建命令必须实现的 trait
 pub trait Builtin {
-    fn execute(&self, args: &[String], context: &mut ShellContext) -> Result<ShouldExit, ShellError>;
+    fn execute(&self, args: &[String], context: &mut ShellContext, writer: &mut dyn Write) -> Result<ShouldExit, ShellError>;
 }
 
 // 子模块声明
