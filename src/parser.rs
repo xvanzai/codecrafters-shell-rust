@@ -4,9 +4,12 @@ use crate::error::ShellError;
 pub enum Redirection {
     /// 输出重定向到文件（截断）
     Overwrite(String),
+    /// 输出重定向到文件（追加）
+    Append(String),
     /// 标准错误重定向到文件（截断）
     StderrOverwrite(String),
-    // 未来可扩展 Append(String)
+    /// 标准错误重定向到文件（追加）
+    StderrAppend(String),
 }
 
 /// 解析后的命令
@@ -130,6 +133,8 @@ fn extract_redirects(tokens: &mut Vec<String>) -> Result<Vec<Redirection>, Shell
         let redir_type: Option<fn(String) -> Redirection> = match token.as_str() {
             ">" | "1>" => Some(Redirection::Overwrite),
             "2>" => Some(Redirection::StderrOverwrite),
+            ">>" | "1>>" => Some(Redirection::Append),
+            "2>>" => Some(Redirection::StderrAppend),
             _ => None,
         };
 

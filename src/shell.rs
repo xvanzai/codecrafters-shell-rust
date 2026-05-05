@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::process::Command;
 
@@ -80,11 +80,11 @@ impl Shell {
         // 1. 按流分类重定向
         let stdout_redirs: Vec<_> = redirects
             .iter()
-            .filter(|r| matches!(r, Redirection::Overwrite(_)))
+            .filter(|r| matches!(r, Redirection::Overwrite(_) | Redirection::Append(_)))
             .collect();
         let stderr_redirs: Vec<_> = redirects
             .iter()
-            .filter(|r| matches!(r, Redirection::StderrOverwrite(_)))
+            .filter(|r| matches!(r, Redirection::StderrOverwrite(_) | Redirection::StderrAppend(_)))
             .collect();
 
         // 2. 对每个流，遍历重定向产生副作用，只保留最后一个文件句柄
@@ -109,7 +109,7 @@ impl Shell {
                     // 将错误消息写入 builtin 自己的 stderr 流
                     writeln!(error_output, "{}", e).unwrap();
                     return Ok(ShouldExit::Continue);
-                },
+                }
             }
         }
 
@@ -170,5 +170,10 @@ fn open_redirect_file(redir: &Redirection) -> Result<File, ShellError> {
                 ShellError::BuiltinError(format!("failed to open {}: {}", filename, e))
             })
         }
+        Redirection::Append(filename) | Redirection::StderrAppend(filename) => OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(filename)
+            .map_err(|e| ShellError::BuiltinError(format!("failed to open {}: {}", filename, e))),
     }
 }
