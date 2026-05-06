@@ -4,6 +4,7 @@ mod error;
 mod parser;
 mod resolver;
 mod builtins;
+mod completer;
 
 use shell::Shell;
 use error::ShellError;

@@ -3,7 +3,9 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::process::Command;
 
+
 use crate::builtins::{self, Builtin, ShouldExit};
+use crate::completer::{ShellHelper, create_editor_with_helper};
 use crate::context::ShellContext;
 use crate::error::ShellError;
 use crate::parser::{self, ParsedCommand, Redirection};
@@ -11,6 +13,7 @@ use crate::parser::{self, ParsedCommand, Redirection};
 pub struct Shell {
     builtins: HashMap<String, Box<dyn Builtin>>,
     context: ShellContext,
+    editor: rustyline::Editor<ShellHelper, rustyline::history::DefaultHistory>,
 }
 
 impl Shell {
@@ -32,38 +35,52 @@ impl Shell {
             builtins.insert(name.to_string(), builtin);
         }
 
-        Shell { builtins, context }
+        // 创建编辑器并绑定补全器
+        let editor = create_editor_with_helper(&context);
+
+        Shell {
+            builtins,
+            context,
+            editor,
+        }
     }
 
     pub fn run(&mut self) -> Result<(), ShellError> {
         loop {
-            print!("$ ");
-            io::stdout().flush()?;
+            let readline = self.editor.readline("$ ");
 
-            let mut input = String::new();
-            match io::stdin().read_line(&mut input) {
-                Ok(0) => break, // EOF
-                Ok(_) => {}
-                Err(e) => return Err(ShellError::Io(e)),
-            }
+            match readline {
+                Ok(line) => {
+                    // 处理用户输入
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
 
-            let trimmed = input.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
+                    let cmd = match parser::parse(trimmed) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("{}", e); // 语法错误直接输出到全局 stderr
+                            continue;
+                        }
+                    };
 
-            let cmd = match parser::parse(trimmed) {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("{}", e);   // 语法错误直接输出到全局 stderr
-                    continue;
+                    match self.execute_command(cmd) {
+                        Ok(ShouldExit::Continue) => {}
+                        Ok(ShouldExit::Exit) => break,
+                        Err(e) => eprintln!("{}", e), // 其他错误
+                    }
                 }
-            };
-
-            match self.execute_command(cmd) {
-                Ok(ShouldExit::Continue) => {}
-                Ok(ShouldExit::Exit) => break,
-                Err(e) => eprintln!("{}", e),   // 其他错误
+                Err(rustyline::error::ReadlineError::Eof) => {
+                    break; // 用户按下 Ctrl+D
+                }
+                Err(rustyline::error::ReadlineError::Interrupted) => {
+                    continue; // 用户按下 Ctrl+C
+                }
+                Err(e) => {
+                    eprintln!("Error reading line: {}", e);
+                    break;
+                }
             }
         }
         Ok(())
@@ -83,7 +100,12 @@ impl Shell {
             .collect();
         let stderr_redirs: Vec<_> = redirects
             .iter()
-            .filter(|r| matches!(r, Redirection::StderrOverwrite(_) | Redirection::StderrAppend(_)))
+            .filter(|r| {
+                matches!(
+                    r,
+                    Redirection::StderrOverwrite(_) | Redirection::StderrAppend(_)
+                )
+            })
             .collect();
 
         // 2. 产生副作用并获取最终句柄
@@ -165,15 +187,10 @@ fn open_redirect_file(redir: &Redirection) -> Result<File, ShellError> {
     };
 
     let file = if append {
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(filename)
+        OpenOptions::new().create(true).append(true).open(filename)
     } else {
         File::create(filename)
     };
 
-    file.map_err(|e| {
-        ShellError::BuiltinError(format!("failed to open {}: {}", filename, e))
-    })
+    file.map_err(|e| ShellError::BuiltinError(format!("failed to open {}: {}", filename, e)))
 }
