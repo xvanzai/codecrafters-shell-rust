@@ -1,6 +1,7 @@
 // src/completer.rs
 use crate::context::ShellContext;
 use rustyline::completion::{Completer as CompleterTarit, Pair};
+use rustyline::config::Configurer;
 use rustyline::error::ReadlineError;
 use rustyline::{Completer, Context, Helper, Highlighter, Hinter, Validator};
 use std::collections::HashSet;
@@ -54,7 +55,7 @@ impl CompleterTarit for ShellCompleter {
 
         // 截取光标前的单词作为匹配前缀
         let prefix = &line[..pos];
-        let candidates: Vec<Pair> = self
+        let mut candidates: Vec<Pair> = self
             .commands
             .iter()
             .filter(|cmd| cmd.starts_with(prefix))
@@ -63,6 +64,8 @@ impl CompleterTarit for ShellCompleter {
                 replacement: format!("{} ", cmd.clone()),
             })
             .collect();
+
+        candidates.sort_by(|a, b| a.display.cmp(&b.display));
 
         // start 是替换的起始位置，这里是 0（替换整个单词）
         Ok((0, candidates))
@@ -86,5 +89,6 @@ pub fn create_editor_with_helper(context: &ShellContext) -> rustyline::Editor<Sh
     let mut editor = rustyline::Editor::new().expect("Failed to create rustyline editor");
     let helper = create_shell_helper(context);
     editor.set_helper(Some(helper));
+    editor.set_completion_type(rustyline::CompletionType::List);
     editor
 }
