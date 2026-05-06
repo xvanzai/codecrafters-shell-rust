@@ -4,7 +4,6 @@ use rustyline::completion::{Completer as CompleterTarit, Pair};
 use rustyline::error::ReadlineError;
 use rustyline::{Completer, Context, Helper, Highlighter, Hinter, Validator};
 use std::collections::HashSet;
-use std::fmt::format;
 
 pub struct ShellCompleter {
     commands: HashSet<String>,
