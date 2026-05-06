@@ -46,8 +46,8 @@ impl CompleterTarit for ShellCompleter {
             .iter()
             .filter(|cmd| cmd.starts_with(prefix))
             .map(|cmd| Pair {
-                display: cmd.clone(),
-                replacement: cmd.clone(),
+                display: cmd.clone() + " ",
+                replacement: cmd.clone() + " ",
             })
             .collect();
 
