@@ -4,6 +4,7 @@ use rustyline::completion::{Completer as CompleterTarit, Pair};
 use rustyline::error::ReadlineError;
 use rustyline::{Completer, Context, Helper, Highlighter, Hinter, Validator};
 use std::collections::HashSet;
+use std::fmt::format;
 
 pub struct ShellCompleter {
     commands: HashSet<String>,
@@ -46,8 +47,8 @@ impl CompleterTarit for ShellCompleter {
             .iter()
             .filter(|cmd| cmd.starts_with(prefix))
             .map(|cmd| Pair {
-                display: cmd.clone() + " ",
-                replacement: cmd.clone() + " ",
+                display: cmd.clone(),
+                replacement: format!("{} ", cmd.clone()),
             })
             .collect();
 
