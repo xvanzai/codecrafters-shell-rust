@@ -19,6 +19,19 @@ impl ShellCompleter {
             commands.insert(name.clone());
         }
 
+        // path 外部命令
+        if let Some(path) = context.env_vars.get("PATH") {
+            for dir in path.split(':') {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        if let Some(name) = entry.file_name().to_str() {
+                            commands.insert(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
         ShellCompleter { commands }
     }
 }
