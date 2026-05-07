@@ -50,11 +50,6 @@ impl CompleterTarit for ShellCompleter {
         pos: usize,
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
-        // 光标在空格处或行首时，不提供补全
-        if pos == 0 || line.as_bytes().get(pos.wrapping_sub(1)) == Some(&b' ') {
-            return Ok((0, vec![]));
-        }
-
         // 1. 找到光标所在单词的起始位置
         let word_start = line[..pos]
             .rfind(|c: char| c.is_whitespace())
