@@ -78,7 +78,11 @@ impl CompleterTarit for ShellCompleter {
                 u,
                 c.into_iter()
                     .map(|pair| Pair {
-                        display: pair.display,
+                        display:      if pair.replacement.ends_with('/') {
+                            pair.display.clone() + "/"
+                        } else {
+                            pair.display.clone()
+                        },
                         replacement: if !pair.replacement.ends_with('/')
                             && !pair.replacement.ends_with(' ')
                         {
