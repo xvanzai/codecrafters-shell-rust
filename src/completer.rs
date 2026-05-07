@@ -1,6 +1,6 @@
 // src/completer.rs
 use crate::context::ShellContext;
-use rustyline::completion::{Completer as CompleterTarit, Pair};
+use rustyline::completion::{Completer as CompleterTarit, FilenameCompleter, Pair};
 use rustyline::config::Configurer;
 use rustyline::error::ReadlineError;
 use rustyline::{Completer, Context, Helper, Highlighter, Hinter, Validator};
@@ -8,6 +8,7 @@ use std::collections::HashSet;
 
 pub struct ShellCompleter {
     commands: HashSet<String>,
+    filename_completer: FilenameCompleter,
 }
 
 impl ShellCompleter {
@@ -33,7 +34,10 @@ impl ShellCompleter {
             }
         }
 
-        ShellCompleter { commands }
+        ShellCompleter {
+            commands,
+            filename_completer: FilenameCompleter::new(),
+        }
     }
 }
 
@@ -46,29 +50,55 @@ impl CompleterTarit for ShellCompleter {
         pos: usize,
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
-        // 仅补全第一个单词（命令名），且光标必须位于行尾或单词末尾
-        if let Some(first_word_end) = line.find(|c: char| c.is_whitespace())
-            && pos > first_word_end
-        {
-            return Ok((0, Vec::new()));
+        // 光标在空格处或行首时，不提供补全
+        if pos == 0 || line.as_bytes().get(pos.wrapping_sub(1)) == Some(&b' ') {
+            return Ok((0, vec![]));
         }
 
-        // 截取光标前的单词作为匹配前缀
-        let prefix = &line[..pos];
-        let mut candidates: Vec<Pair> = self
-            .commands
-            .iter()
-            .filter(|cmd| cmd.starts_with(prefix))
-            .map(|cmd| Pair {
-                display: cmd.clone(),
-                replacement: format!("{} ", cmd.clone()),
-            })
-            .collect();
+        // 1. 找到光标所在单词的起始位置
+        let word_start = line[..pos]
+            .rfind(|c: char| c.is_whitespace())
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let word = &line[word_start..pos];
+
+        // 2. 根据上下文分发
+        let (upos, mut candidates) = if word_start == 0 && !word.contains('/') {
+            // rustyline 的 completer 是基于光标位置的，所以我们需要判断当前光标所在单词是否是第一个单词（命令）。
+            // 如果是第一个单词且不包含路径分隔符（/），则进行命令补全；
+            let ca: Vec<_> = self
+                .commands
+                .iter()
+                .filter(|cmd| cmd.starts_with(word))
+                .map(|cmd| Pair {
+                    display: cmd.clone(),
+                    replacement: format!("{} ", cmd.clone()),
+                })
+                .collect();
+            (word_start, ca)
+        } else {
+            // 否则进行文件补全
+            let (u, c) = self.filename_completer.complete(line, pos, _ctx)?;
+            (
+                u,
+                c.into_iter()
+                    .map(|pair| Pair {
+                        display: pair.display,
+                        replacement: if !pair.replacement.ends_with('/')
+                            && !pair.replacement.ends_with(' ')
+                        {
+                            format!("{} ", pair.replacement)
+                        } else {
+                            pair.replacement
+                        },
+                    })
+                    .collect(),
+            )
+        };
 
         candidates.sort_by(|a, b| a.display.cmp(&b.display));
 
-        // start 是替换的起始位置，这里是 0（替换整个单词）
-        Ok((0, candidates))
+        Ok((upos, candidates))
     }
 }
 
@@ -85,7 +115,9 @@ fn create_shell_helper(context: &ShellContext) -> ShellHelper {
     ShellHelper { completer }
 }
 
-pub fn create_editor_with_helper(context: &ShellContext) -> rustyline::Editor<ShellHelper, rustyline::history::DefaultHistory> {
+pub fn create_editor_with_helper(
+    context: &ShellContext,
+) -> rustyline::Editor<ShellHelper, rustyline::history::DefaultHistory> {
     let mut editor = rustyline::Editor::new().expect("Failed to create rustyline editor");
     let helper = create_shell_helper(context);
     editor.set_helper(Some(helper));
