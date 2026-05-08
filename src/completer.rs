@@ -80,7 +80,16 @@ impl CompleterTarit for ShellCompleter {
             let first_word = line.split_whitespace().next().unwrap_or("");
             if let Some(script_path) = self.complete_command.borrow().get(first_word) {
                 // 如果第一个单词有对应的补全规范，则执行补全脚本获取候选项
-                (word_start, run_completer_script(script_path, line, pos))
+                let c = run_completer_script(script_path, line, pos);
+                (
+                    word_start,
+                    c.into_iter()
+                        .map(|pair| Pair {
+                            display: pair.display.clone(),
+                            replacement: format!("{} ", pair.replacement),
+                        })
+                        .collect(),
+                )
             } else {
                 // 否则进行文件补全
                 let (u, c) = self.filename_completer.complete(line, pos, _ctx)?;
@@ -165,6 +174,8 @@ fn run_completer_script(script_path: &str, line: &str, pos: usize) -> Vec<Pair> 
         };
     let output = match Command::new(script_path)
         .args(&[command_name, current_word, previous_word])
+        .env("COMP_LINE", line)
+        .env("COMP_POINT", pos.to_string())
         .output()
     {
         Ok(o) => o,
