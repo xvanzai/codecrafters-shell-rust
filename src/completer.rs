@@ -7,6 +7,7 @@ use rustyline::{Completer, Context, Helper, Highlighter, Hinter, Validator};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::vec;
 
 pub struct ShellCompleter {
     commands: HashSet<String>,
@@ -79,7 +80,7 @@ impl CompleterTarit for ShellCompleter {
             let first_word = line.split_whitespace().next().unwrap_or("");
             if let Some(script_path) = self.complete_command.borrow().get(first_word) {
                 // 如果第一个单词有对应的补全规范，则执行补全脚本获取候选项
-                (word_start, run_completer_script(script_path))
+                (word_start, run_completer_script(script_path, line, pos))
             } else {
                 // 否则进行文件补全
                 let (u, c) = self.filename_completer.complete(line, pos, _ctx)?;
@@ -134,10 +135,38 @@ pub fn create_editor_with_helper(
     editor
 }
 
-fn run_completer_script(script_path: &str) -> Vec<Pair> {
+fn run_completer_script(script_path: &str, line: &str, pos: usize) -> Vec<Pair> {
     use std::process::Command;
+    let text_before_cursor = &line[..pos];
 
-    let output = match Command::new(script_path).output() {
+    // 命令名：第一个 token（如果存在）
+    let tokens: Vec<&str> = text_before_cursor.split_whitespace().collect();
+    if tokens.is_empty() {
+        return vec![];
+    }
+
+    let command_name = tokens[0].to_string();
+
+    // 确定当前要补全的单词 (argv[2]) 和前一个单词 (argv[3])
+    let (current_word, previous_word) =
+        if pos > 0 && text_before_cursor.as_bytes().last() == Some(&b' ') {
+            // 光标紧跟在空格后：当前单词为空，前一个单词为最后一个完整的单词
+            let prev = tokens.last().map(|s| s.to_string()).unwrap_or_default();
+            ("".to_string(), prev)
+        } else {
+            // 光标在单词内部
+            let current = tokens.last().map(|s| s.to_string()).unwrap_or_default();
+            let prev = if tokens.len() >= 2 {
+                tokens[tokens.len() - 2].to_string()
+            } else {
+                "".to_string()
+            };
+            (current, prev)
+        };
+    let output = match Command::new(script_path)
+        .args(&[command_name, current_word, previous_word])
+        .output()
+    {
         Ok(o) => o,
         Err(_) => return vec![],
     };
