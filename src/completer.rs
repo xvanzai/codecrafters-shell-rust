@@ -80,16 +80,7 @@ impl CompleterTarit for ShellCompleter {
             let first_word = line.split_whitespace().next().unwrap_or("");
             if let Some(script_path) = self.complete_command.borrow().get(first_word) {
                 // 如果第一个单词有对应的补全规范，则执行补全脚本获取候选项
-                let c = run_completer_script(script_path, line, pos);
-                (
-                    word_start,
-                    c.into_iter()
-                        .map(|pair| Pair {
-                            display: pair.display.clone(),
-                            replacement: format!("{} ", pair.replacement),
-                        })
-                        .collect(),
-                )
+                (word_start, run_completer_script(script_path, line, pos))
             } else {
                 // 否则进行文件补全
                 let (u, c) = self.filename_completer.complete(line, pos, _ctx)?;
