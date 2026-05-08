@@ -53,4 +53,9 @@ impl ShellContext {
     pub fn get_complete_command_path(&self, command: &str) -> Option<String> {
         self.complete_command.borrow().get(command).cloned()
     }
+
+    /// 移除补全规范
+    pub fn remove_complete_command(&mut self, command: &str) {
+        self.complete_command.borrow_mut().remove(command);
+    }
 }

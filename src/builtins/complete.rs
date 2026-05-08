@@ -28,6 +28,9 @@ impl Builtin for CompleteBuiltin {
                     context.register_complete_command(command_name, path);
                 }
             }
+            [flag , command_name, ..] if flag == "-r" => {
+                context.remove_complete_command(command_name);
+            }
             [..] => {}
         }
         Ok(ShouldExit::Continue)
