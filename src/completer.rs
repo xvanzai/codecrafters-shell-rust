@@ -4,10 +4,13 @@ use rustyline::completion::{Completer as CompleterTarit, FilenameCompleter, Pair
 use rustyline::config::Configurer;
 use rustyline::error::ReadlineError;
 use rustyline::{Completer, Context, Helper, Highlighter, Hinter, Validator};
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 pub struct ShellCompleter {
     commands: HashSet<String>,
+    complete_command: Rc<RefCell<HashMap<String, String>>>,
     filename_completer: FilenameCompleter,
 }
 
@@ -36,6 +39,7 @@ impl ShellCompleter {
 
         ShellCompleter {
             commands,
+            complete_command: Rc::clone(&context.complete_command),
             filename_completer: FilenameCompleter::new(),
         }
     }
@@ -72,27 +76,33 @@ impl CompleterTarit for ShellCompleter {
                 .collect();
             (word_start, ca)
         } else {
-            // 否则进行文件补全
-            let (u, c) = self.filename_completer.complete(line, pos, _ctx)?;
-            (
-                u,
-                c.into_iter()
-                    .map(|pair| Pair {
-                        display:      if pair.replacement.ends_with('/') {
-                            pair.display.clone() + "/"
-                        } else {
-                            pair.display.clone()
-                        },
-                        replacement: if !pair.replacement.ends_with('/')
-                            && !pair.replacement.ends_with(' ')
-                        {
-                            format!("{} ", pair.replacement)
-                        } else {
-                            pair.replacement
-                        },
-                    })
-                    .collect(),
-            )
+            let first_word = line.split_whitespace().next().unwrap_or("");
+            if let Some(script_path) = self.complete_command.borrow().get(first_word) {
+                // 如果第一个单词有对应的补全规范，则执行补全脚本获取候选项
+                (word_start, run_completer_script(script_path))
+            } else {
+                // 否则进行文件补全
+                let (u, c) = self.filename_completer.complete(line, pos, _ctx)?;
+                (
+                    u,
+                    c.into_iter()
+                        .map(|pair| Pair {
+                            display: if pair.replacement.ends_with('/') {
+                                pair.display.clone() + "/"
+                            } else {
+                                pair.display.clone()
+                            },
+                            replacement: if !pair.replacement.ends_with('/')
+                                && !pair.replacement.ends_with(' ')
+                            {
+                                format!("{} ", pair.replacement)
+                            } else {
+                                pair.replacement
+                            },
+                        })
+                        .collect(),
+                )
+            }
         };
 
         candidates.sort_by(|a, b| a.display.cmp(&b.display));
@@ -122,4 +132,27 @@ pub fn create_editor_with_helper(
     editor.set_helper(Some(helper));
     editor.set_completion_type(rustyline::CompletionType::List);
     editor
+}
+
+fn run_completer_script(script_path: &str) -> Vec<Pair> {
+    use std::process::Command;
+
+    let output = match Command::new(script_path).output() {
+        Ok(o) => o,
+        Err(_) => return vec![],
+    };
+
+    if !output.status.success() {
+        return vec![];
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| Pair {
+            display: l.to_string(),
+            replacement: format!("{} ", l),
+        })
+        .collect()
 }

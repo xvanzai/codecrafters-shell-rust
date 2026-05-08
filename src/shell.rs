@@ -28,7 +28,7 @@ impl Shell {
             ("type", Box::new(builtins::TypeBuiltin)),
             ("pwd", Box::new(builtins::PwdBuiltin)),
             ("cd", Box::new(builtins::CdBuiltin)),
-            ("complete", Box::new(builtins::CompleteBuiltin::new())),
+            ("complete", Box::new(builtins::CompleteBuiltin)),
         ];
 
         for (name, builtin) in cmd_list {

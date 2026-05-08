@@ -1,13 +1,16 @@
+use crate::resolver::resolve_path;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use crate::resolver::resolve_path;
+use std::rc::Rc;
 
 pub struct ShellContext {
     pub env_vars: HashMap<String, String>,
     cmd_cache: HashMap<String, PathBuf>,
     /// 供 type 等命令判断是否内建
     pub builtin_names: Vec<String>,
+    pub complete_command: Rc<RefCell<HashMap<String, String>>>,
 }
 
 impl ShellContext {
@@ -16,6 +19,7 @@ impl ShellContext {
             env_vars: env::vars().collect(),
             cmd_cache: HashMap::new(),
             builtin_names: Vec::new(),
+            complete_command: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -36,5 +40,17 @@ impl ShellContext {
     /// 注册内建命令名（在 Shell 初始化时调用）
     pub fn register_builtin_name(&mut self, name: &str) {
         self.builtin_names.push(name.to_string());
+    }
+
+    /// 注册补全规范（在 complete 内建命令执行时调用）
+    pub fn register_complete_command(&mut self, command: &str, path: &str) {
+        self.complete_command
+            .borrow_mut()
+            .insert(command.to_string(), path.to_string());
+    }
+
+    /// 获取补全规范路径
+    pub fn get_complete_command_path(&self, command: &str) -> Option<String> {
+        self.complete_command.borrow().get(command).cloned()
     }
 }
