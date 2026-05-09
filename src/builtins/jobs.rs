@@ -20,7 +20,7 @@ impl Builtin for JobsBuiltin {
         writer: &mut dyn Write,
     ) -> Result<ShouldExit, ShellError> {
         for job in context.list_background_jobs() {
-            write!(writer, "[{}]+  {:<24}{} &", job.id, "Running", job.command)?;
+            writeln!(writer, "[{}]+  {:<24}{} &", job.id, "Running", job.command)?;
         }
         Ok(ShouldExit::Continue)
     }
