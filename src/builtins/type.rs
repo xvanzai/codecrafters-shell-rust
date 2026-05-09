@@ -5,6 +5,9 @@ use crate::context::ShellContext;
 pub struct TypeBuiltin;
 
 impl Builtin for TypeBuiltin {
+    fn name(&self) -> &str {
+        "type"
+    }
     fn execute(&self, args: &[String], context: &mut ShellContext, writer: &mut dyn std::io::Write) -> Result<ShouldExit, ShellError> {
         if args.is_empty() {
             return Err(ShellError::BuiltinError("type: missing operand".to_string()));

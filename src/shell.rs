@@ -22,16 +22,18 @@ impl Shell {
         let mut builtins: HashMap<String, Box<dyn Builtin>> = HashMap::new();
 
         // 注册所有内建命令，并同步内建名称到 context
-        let cmd_list: Vec<(&str, Box<dyn Builtin>)> = vec![
-            ("exit", Box::new(builtins::ExitBuiltin)),
-            ("echo", Box::new(builtins::EchoBuiltin)),
-            ("type", Box::new(builtins::TypeBuiltin)),
-            ("pwd", Box::new(builtins::PwdBuiltin)),
-            ("cd", Box::new(builtins::CdBuiltin)),
-            ("complete", Box::new(builtins::CompleteBuiltin)),
+        let cmd_list: Vec<Box<dyn Builtin>> = vec![
+            Box::new(builtins::ExitBuiltin),
+            Box::new(builtins::EchoBuiltin),
+            Box::new(builtins::TypeBuiltin),
+            Box::new(builtins::PwdBuiltin),
+            Box::new(builtins::CdBuiltin),
+            Box::new(builtins::CompleteBuiltin),
+            Box::new(builtins::JobsBuiltin),
         ];
 
-        for (name, builtin) in cmd_list {
+        for builtin in cmd_list {
+            let name = builtin.name();
             context.register_builtin_name(name);
             builtins.insert(name.to_string(), builtin);
         }

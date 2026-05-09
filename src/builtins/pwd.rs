@@ -7,6 +7,9 @@ use crate::{
 pub struct PwdBuiltin;
 
 impl Builtin for PwdBuiltin {
+    fn name(&self) -> &str {
+        "pwd"
+    }
     fn execute(
         &self,
         args: &[String],

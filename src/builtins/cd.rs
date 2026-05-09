@@ -9,6 +9,10 @@ use crate::{
 pub struct CdBuiltin;
 
 impl Builtin for CdBuiltin {
+    fn name(&self) -> &str {
+        "cd"
+    }
+
     fn execute(
         &self,
         args: &[String],

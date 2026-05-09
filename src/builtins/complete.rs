@@ -6,6 +6,9 @@ use crate::{
 pub struct CompleteBuiltin;
 
 impl Builtin for CompleteBuiltin {
+        fn name(&self) -> &str {
+        "complete"
+    }
     fn execute(
         &self,
         args: &[String],
