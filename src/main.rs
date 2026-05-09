@@ -1,13 +1,13 @@
-mod shell;
+mod builtins;
+mod completer;
 mod context;
 mod error;
 mod parser;
 mod resolver;
-mod builtins;
-mod completer;
+mod shell;
 
-use shell::Shell;
 use error::ShellError;
+use shell::Shell;
 
 fn main() -> Result<(), ShellError> {
     let mut shell = Shell::new();

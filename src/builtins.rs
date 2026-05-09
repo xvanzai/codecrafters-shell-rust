@@ -1,7 +1,7 @@
 use std::io::Write;
 
-use crate::error::ShellError;
 use crate::context::ShellContext;
+use crate::error::ShellError;
 
 /// 内建命令执行后的控制信号
 pub enum ShouldExit {
@@ -12,24 +12,29 @@ pub enum ShouldExit {
 /// 内建命令必须实现的 trait
 pub trait Builtin {
     fn name(&self) -> &str;
-    fn execute(&self, args: &[String], context: &mut ShellContext, writer: &mut dyn Write) -> Result<ShouldExit, ShellError>;
+    fn execute(
+        &self,
+        args: &[String],
+        context: &mut ShellContext,
+        writer: &mut dyn Write,
+    ) -> Result<ShouldExit, ShellError>;
 }
 
 // 子模块声明
-pub mod exit;
-pub mod echo;
-#[path = "builtins/type.rs"]
-pub mod type_cmd;   // 避免与关键字冲突，使用 type_cmd 作为模块名
-pub mod pwd;
 pub mod cd;
 pub mod complete;
+pub mod echo;
+pub mod exit;
 pub mod jobs;
+pub mod pwd;
+#[path = "builtins/type.rs"]
+pub mod type_cmd; // 避免与关键字冲突，使用 type_cmd 作为模块名
 
 // 重导出常用类型，方便外部 use
-pub use exit::ExitBuiltin;
-pub use echo::EchoBuiltin;
-pub use type_cmd::TypeBuiltin;
-pub use pwd::PwdBuiltin;
 pub use cd::CdBuiltin;
 pub use complete::CompleteBuiltin;
+pub use echo::EchoBuiltin;
+pub use exit::ExitBuiltin;
 pub use jobs::JobsBuiltin;
+pub use pwd::PwdBuiltin;
+pub use type_cmd::TypeBuiltin;

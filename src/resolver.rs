@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 /// 根据 PATH 查找可执行文件，若 cmd 包含 '/' 则视为直接路径
 pub fn resolve_path(cmd: &str, path_env: Option<&str>) -> Option<PathBuf> {

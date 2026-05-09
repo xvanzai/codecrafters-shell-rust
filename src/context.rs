@@ -11,6 +11,7 @@ pub struct ShellContext {
     /// 供 type 等命令判断是否内建
     pub builtin_names: Vec<String>,
     pub complete_command: Rc<RefCell<HashMap<String, String>>>,
+    pub background_jobs: Vec<std::process::Child>, // 存储后台作业的句柄
 }
 
 impl ShellContext {
@@ -20,6 +21,7 @@ impl ShellContext {
             cmd_cache: HashMap::new(),
             builtin_names: Vec::new(),
             complete_command: Rc::new(RefCell::new(HashMap::new())),
+            background_jobs: Vec::new(),
         }
     }
 
@@ -57,5 +59,10 @@ impl ShellContext {
     /// 移除补全规范
     pub fn remove_complete_command(&mut self, command: &str) {
         self.complete_command.borrow_mut().remove(command);
+    }
+
+    /// 添加后台作业
+    pub fn add_background_job(&mut self, child: std::process::Child) {
+        self.background_jobs.push(child);
     }
 }

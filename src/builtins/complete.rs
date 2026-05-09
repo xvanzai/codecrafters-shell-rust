@@ -6,7 +6,7 @@ use crate::{
 pub struct CompleteBuiltin;
 
 impl Builtin for CompleteBuiltin {
-        fn name(&self) -> &str {
+    fn name(&self) -> &str {
         "complete"
     }
     fn execute(
@@ -31,7 +31,7 @@ impl Builtin for CompleteBuiltin {
                     context.register_complete_command(command_name, path);
                 }
             }
-            [flag , command_name, ..] if flag == "-r" => {
+            [flag, command_name, ..] if flag == "-r" => {
                 context.remove_complete_command(command_name);
             }
             [..] => {}

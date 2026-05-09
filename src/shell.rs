@@ -13,7 +13,6 @@ pub struct Shell {
     builtins: HashMap<String, Box<dyn Builtin>>,
     context: ShellContext,
     editor: rustyline::Editor<ShellHelper, rustyline::history::DefaultHistory>,
-    background_jobs: Vec<std::process::Child>, // 存储后台作业的句柄
 }
 
 impl Shell {
@@ -45,7 +44,6 @@ impl Shell {
             builtins,
             context,
             editor,
-            background_jobs: Vec::new(),
         }
     }
 
@@ -167,8 +165,12 @@ impl Shell {
             match command.spawn() {
                 Ok(child) => {
                     // 打印作业信息，例如 [1] 12345
-                    println!("[{}] {}", self.background_jobs.len() + 1, child.id());
-                    self.background_jobs.push(child);
+                    println!(
+                        "[{}] {}",
+                        self.context.background_jobs.len() + 1,
+                        child.id()
+                    );
+                    self.context.add_background_job(child);
                     Ok(ShouldExit::Continue)
                 }
                 Err(e) => Err(ShellError::Io(e)),
