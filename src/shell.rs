@@ -167,7 +167,7 @@ impl Shell {
             match command.spawn() {
                 Ok(child) => {
                     // 打印作业信息，例如 [1] 12345
-                    println!("[{}] {}", self.background_jobs.len(), child.id());
+                    println!("[{}] {}", self.background_jobs.len() + 1, child.id());
                     self.background_jobs.push(child);
                     Ok(ShouldExit::Continue)
                 }
