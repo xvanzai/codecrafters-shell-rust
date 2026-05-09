@@ -16,10 +16,20 @@ impl Builtin for JobsBuiltin {
     fn execute(
         &self,
         _args: &[String],
-        _context: &mut ShellContext,
-        _writer: &mut dyn Write,
+        context: &mut ShellContext,
+        writer: &mut dyn Write,
     ) -> Result<ShouldExit, ShellError> {
-        // TODO: 实现 jobs 内建命令，列出当前 shell 中的后台作业
+        for job in context.list_background_jobs() {
+            write!(writer, "[{}]+  {:<24}{} &", job.id, "Running", job.command)?;
+        }
         Ok(ShouldExit::Continue)
     }
+}
+
+use std::process::Child;
+
+pub struct Job {
+    pub id: usize,
+    pub command: String,   // 重建的命令文本
+    pub child: Child,
 }

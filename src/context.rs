@@ -1,3 +1,4 @@
+use crate::builtins::jobs::Job;
 use crate::resolver::resolve_path;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -11,7 +12,7 @@ pub struct ShellContext {
     /// 供 type 等命令判断是否内建
     pub builtin_names: Vec<String>,
     pub complete_command: Rc<RefCell<HashMap<String, String>>>,
-    pub background_jobs: Vec<std::process::Child>, // 存储后台作业的句柄
+    pub background_jobs: Vec<Job>, // 存储后台作业的句柄
 }
 
 impl ShellContext {
@@ -62,7 +63,12 @@ impl ShellContext {
     }
 
     /// 添加后台作业
-    pub fn add_background_job(&mut self, child: std::process::Child) {
+    pub fn add_background_job(&mut self, child: Job) {
         self.background_jobs.push(child);
+    }
+
+    /// 列出后台作业
+    pub fn list_background_jobs(&self) -> &Vec<Job> {
+        &self.background_jobs
     }
 }

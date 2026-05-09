@@ -3,6 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::process::Command;
 
+use crate::builtins::jobs::Job;
 use crate::builtins::{self, Builtin, ShouldExit};
 use crate::completer::{ShellHelper, create_editor_with_helper};
 use crate::context::ShellContext;
@@ -170,7 +171,11 @@ impl Shell {
                         self.context.background_jobs.len() + 1,
                         child.id()
                     );
-                    self.context.add_background_job(child);
+                    self.context.add_background_job(Job {
+                        id: self.context.background_jobs.len() + 1,
+                        command: format!("{} {}", cmd_name, args.join(" ")),
+                        child,
+                    });
                     Ok(ShouldExit::Continue)
                 }
                 Err(e) => Err(ShellError::Io(e)),
