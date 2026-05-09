@@ -18,6 +18,7 @@ pub struct ParsedCommand {
     pub name: String,
     pub args: Vec<String>,
     pub redirects: Vec<Redirection>,
+    pub is_background: bool,
 }
 
 pub fn parse(input: &str) -> Result<ParsedCommand, ShellError> {
@@ -26,7 +27,15 @@ pub fn parse(input: &str) -> Result<ParsedCommand, ShellError> {
         return Err(ShellError::ParseError("empty command".to_string()));
     }
 
-    // 提取重定向（目前仅支持 >），并移除相关 token
+    // 检查是否以 & 结尾，表示后台执行
+    let is_background = if tokens.last().map(|s| s.as_str()) == Some("&") {
+        tokens.pop();
+        true
+    } else {
+        false
+    };
+
+    // 提取重定向，并移除相关 token
     let redirections = extract_redirects(&mut tokens)?;
 
     if tokens.is_empty() {
@@ -37,6 +46,7 @@ pub fn parse(input: &str) -> Result<ParsedCommand, ShellError> {
         name: tokens.remove(0),
         args: tokens,
         redirects: redirections,
+        is_background,
     })
 }
 

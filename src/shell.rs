@@ -3,7 +3,6 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::process::Command;
 
-
 use crate::builtins::{self, Builtin, ShouldExit};
 use crate::completer::{ShellHelper, create_editor_with_helper};
 use crate::context::ShellContext;
@@ -14,6 +13,7 @@ pub struct Shell {
     builtins: HashMap<String, Box<dyn Builtin>>,
     context: ShellContext,
     editor: rustyline::Editor<ShellHelper, rustyline::history::DefaultHistory>,
+    background_jobs: Vec<std::process::Child>, // 存储后台作业的句柄
 }
 
 impl Shell {
@@ -45,6 +45,7 @@ impl Shell {
             builtins,
             context,
             editor,
+            background_jobs: Vec::new(),
         }
     }
 
@@ -94,6 +95,7 @@ impl Shell {
             name,
             args,
             redirects,
+            is_background,
         } = cmd;
 
         // 1. 分离 stdout / stderr 重定向
@@ -160,15 +162,28 @@ impl Shell {
             command.stderr(file);
         }
 
-        command.status().map_err(|e| {
-            if e.kind() == io::ErrorKind::NotFound {
-                ShellError::CommandNotFound(name.clone())
-            } else {
-                ShellError::Io(e)
+        if is_background {
+            // 后台运行：spawn 并存储句柄，不等待
+            match command.spawn() {
+                Ok(child) => {
+                    // 打印作业信息，例如 [1] 12345
+                    println!("[{}] {}", self.background_jobs.len(), child.id());
+                    self.background_jobs.push(child);
+                    Ok(ShouldExit::Continue)
+                }
+                Err(e) => Err(ShellError::Io(e)),
             }
-        })?;
-
-        Ok(ShouldExit::Continue)
+        } else {
+            // 前台运行：等待结束
+            let _status = command.status().map_err(|e| {
+                if e.kind() == io::ErrorKind::NotFound {
+                    ShellError::CommandNotFound(name.clone())
+                } else {
+                    ShellError::Io(e)
+                }
+            })?;
+            Ok(ShouldExit::Continue)
+        }
     }
 }
 
