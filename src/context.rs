@@ -68,7 +68,7 @@ impl ShellContext {
     }
 
     /// 列出后台作业
-    pub fn list_background_jobs(&self) -> &Vec<Job> {
-        &self.background_jobs
+    pub fn list_background_jobs_mut(&mut self) -> &mut Vec<Job> {
+        &mut self.background_jobs
     }
 }
