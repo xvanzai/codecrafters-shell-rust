@@ -50,6 +50,9 @@ impl Shell {
 
     pub fn run(&mut self) -> Result<(), ShellError> {
         loop {
+
+            self.context.print_background_jobs_is_done(&mut io::stdout())?;
+
             let readline = self.editor.readline("$ ");
 
             match readline {

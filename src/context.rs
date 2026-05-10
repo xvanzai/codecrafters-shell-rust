@@ -1,4 +1,5 @@
 use crate::builtins::jobs::Job;
+use crate::error::ShellError;
 use crate::resolver::resolve_path;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -67,8 +68,78 @@ impl ShellContext {
         self.background_jobs.push(child);
     }
 
-    /// 列出后台作业
-    pub fn list_background_jobs_mut(&mut self) -> &mut Vec<Job> {
-        &mut self.background_jobs
+    fn print_background_jobs_internal(
+        &mut self,
+        writer: &mut dyn std::io::Write,
+        show_running: bool,
+    ) -> Result<(), ShellError> {
+        let jobs = &mut self.background_jobs;
+        let len = jobs.len();
+        let mut remove_ids = Vec::new();
+
+        for (i, job) in jobs.iter_mut().enumerate() {
+            let marker = if i == len - 1 {
+                "+"
+            } else if i == len - 2 {
+                "-"
+            } else {
+                " "
+            };
+
+            match job.child.try_wait() {
+                Ok(Some(_status)) => {
+                    writeln!(
+                        writer,
+                        "[{}]{}  {:<24}{}",
+                        job.id,
+                        marker,
+                        "Done",
+                        job.command
+                    )?;
+                    remove_ids.push(job.id);
+                }
+                Ok(None) if show_running => {
+                    writeln!(
+                        writer,
+                        "[{}]{}  {:<24}{} &",
+                        job.id,
+                        marker,
+                        "Running",
+                        job.command
+                    )?;
+                }
+                Ok(None) => {}
+                Err(_) => {
+                    writeln!(
+                        writer,
+                        "[{}]{}  {:<24}{}",
+                        job.id,
+                        marker,
+                        "Done",
+                        job.command
+                    )?;
+                    remove_ids.push(job.id);
+                }
+            }
+        }
+
+        jobs.retain(|job| !remove_ids.contains(&job.id));
+        Ok(())
+    }
+
+    /// 打印后台作业状态并清理已结束的作业
+    pub fn print_background_jobs(
+        &mut self,
+        writer: &mut dyn std::io::Write,
+    ) -> Result<(), ShellError> {
+        self.print_background_jobs_internal(writer, true)
+    }
+
+    /// 检查后台作业状态并打印 Done（在每次显示提示符前调用）
+    pub fn print_background_jobs_is_done(
+        &mut self,
+        writer: &mut dyn std::io::Write,
+    ) -> Result<(), ShellError> {
+        self.print_background_jobs_internal(writer, false)
     }
 }
