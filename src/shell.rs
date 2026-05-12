@@ -183,7 +183,7 @@ impl Shell {
                     );
                     self.context.add_background_job(Job {
                         id: self.context.background_jobs.len() + 1,
-                        command: format!("{} {}", path.display(), args.join(" ")),
+                        command: format!("{} {}", name, args.join(" ")),
                         child,
                     });
                     Ok(ShouldExit::Continue)
