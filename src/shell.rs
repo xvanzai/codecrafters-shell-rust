@@ -160,7 +160,7 @@ impl Shell {
             .resolve_cmd(&name)
             .ok_or_else(|| ShellError::CommandNotFound(name.clone()))?;
 
-        let mut command = Command::new(&path);
+        let mut command = Command::new(path.file_name().unwrap());
         command.args(&args);
 
         // 将文件句柄转移给 Command（注意：此时 final_stdout/stderr 已不再被借用）
