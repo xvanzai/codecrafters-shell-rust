@@ -21,6 +21,11 @@ pub struct ParsedCommand {
     pub is_background: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct Pipeline {
+    pub commands: Vec<ParsedCommand>,
+}
+
 pub fn parse(input: &str) -> Result<ParsedCommand, ShellError> {
     let mut tokens = tokenize(input)?;
     if tokens.is_empty() {
@@ -173,6 +178,74 @@ fn next_token_as_filename(tokens: &[String], op_index: usize) -> Result<String, 
     }
     Ok(tokens[op_index + 1].clone())
 }
+
+
+/// 解析含有管道的命令行，返回一个 Pipeline
+pub fn parse_pipeline(input: &str) -> Result<Pipeline, ShellError> {
+    let tokens = tokenize(input)?;
+    if tokens.is_empty() {
+        return Err(ShellError::ParseError("empty command".to_string()));
+    }
+
+    let mut commands = Vec::new();
+    let mut cur_tokens = Vec::new();
+
+    for token in tokens {
+        if token == "|" {
+            if cur_tokens.is_empty() {
+                return Err(ShellError::ParseError("unexpected |".into()));
+            }
+            let cmd = build_command_from_tokens(&cur_tokens, false)?;   // false 表示不支持 &
+            commands.push(cmd);
+            cur_tokens.clear();
+        } else {
+            cur_tokens.push(token);
+        }
+    }
+
+    if cur_tokens.is_empty() {
+        return Err(ShellError::ParseError("unexpected end of pipeline".into()));
+    }
+    let cmd = build_command_from_tokens(&cur_tokens, false)?;
+    commands.push(cmd);
+
+    Ok(Pipeline { commands })
+}
+
+/// 从 tokens 构建 ParsedCommand，选择是否允许后台 & 标记
+fn build_command_from_tokens(
+    tokens: &[String],
+    allow_background: bool,
+) -> Result<ParsedCommand, ShellError> {
+    let mut words = tokens.to_vec();
+
+    // 检查后台符号（仅当允许时）
+    let is_background = if allow_background {
+        if words.last().map(|s| s.as_str()) == Some("&") {
+            words.pop();
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    let redirects = extract_redirects(&mut words)?;   // 复用已有的重定向提取
+
+    if words.is_empty() {
+        return Err(ShellError::ParseError("missing command".into()));
+    }
+
+    let name = words.remove(0);
+    Ok(ParsedCommand {
+        name,
+        args: words,
+        redirects,
+        is_background,
+    })
+}
+
 
 #[cfg(test)]
 mod tests {
