@@ -179,7 +179,6 @@ fn next_token_as_filename(tokens: &[String], op_index: usize) -> Result<String, 
     Ok(tokens[op_index + 1].clone())
 }
 
-
 /// 解析含有管道的命令行，返回一个 Pipeline
 pub fn parse_pipeline(input: &str) -> Result<Pipeline, ShellError> {
     let tokens = tokenize(input)?;
@@ -195,7 +194,7 @@ pub fn parse_pipeline(input: &str) -> Result<Pipeline, ShellError> {
             if cur_tokens.is_empty() {
                 return Err(ShellError::ParseError("unexpected |".into()));
             }
-            let cmd = build_command_from_tokens(&cur_tokens, false)?;   // false 表示不支持 &
+            let cmd = build_command_from_tokens(&cur_tokens, false)?; // false 表示不支持 &
             commands.push(cmd);
             cur_tokens.clear();
         } else {
@@ -231,7 +230,7 @@ fn build_command_from_tokens(
         false
     };
 
-    let redirects = extract_redirects(&mut words)?;   // 复用已有的重定向提取
+    let redirects = extract_redirects(&mut words)?; // 复用已有的重定向提取
 
     if words.is_empty() {
         return Err(ShellError::ParseError("missing command".into()));
@@ -245,7 +244,6 @@ fn build_command_from_tokens(
         is_background,
     })
 }
-
 
 #[cfg(test)]
 mod tests {

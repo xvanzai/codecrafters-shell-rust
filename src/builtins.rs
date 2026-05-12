@@ -18,6 +18,11 @@ pub trait Builtin {
         context: &mut ShellContext,
         writer: &mut dyn Write,
     ) -> Result<ShouldExit, ShellError>;
+    /// 该内建命令是否需要从标准输入读取数据。
+    /// 默认不需要输入，若需要请覆盖返回 true。
+    fn needs_stdin(&self) -> bool {
+        false
+    }
 }
 
 // 子模块声明

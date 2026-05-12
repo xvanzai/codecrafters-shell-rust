@@ -91,10 +91,7 @@ impl ShellContext {
                     writeln!(
                         writer,
                         "[{}]{}  {:<24}{}",
-                        job.id,
-                        marker,
-                        "Done",
-                        job.command
+                        job.id, marker, "Done", job.command
                     )?;
                     remove_ids.push(job.id);
                 }
@@ -102,10 +99,7 @@ impl ShellContext {
                     writeln!(
                         writer,
                         "[{}]{}  {:<24}{} &",
-                        job.id,
-                        marker,
-                        "Running",
-                        job.command
+                        job.id, marker, "Running", job.command
                     )?;
                 }
                 Ok(None) => {}
@@ -113,10 +107,7 @@ impl ShellContext {
                     writeln!(
                         writer,
                         "[{}]{}  {:<24}{}",
-                        job.id,
-                        marker,
-                        "Done",
-                        job.command
+                        job.id, marker, "Done", job.command
                     )?;
                     remove_ids.push(job.id);
                 }

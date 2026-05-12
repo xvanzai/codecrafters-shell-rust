@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Cursor, Write};
 use std::process::{Child, Command, Stdio};
 
 use crate::builtins::jobs::Job;
@@ -160,12 +160,7 @@ impl Shell {
             .resolve_cmd(&name)
             .ok_or_else(|| ShellError::CommandNotFound(name.clone()))?;
 
-        let cmd_name = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| ShellError::CommandNotFound(name.clone()))?;
-
-        let mut command = Command::new(cmd_name);
+        let mut command = Command::new(&path);
         command.args(&args);
 
         // 将文件句柄转移给 Command（注意：此时 final_stdout/stderr 已不再被借用）
@@ -188,7 +183,7 @@ impl Shell {
                     );
                     self.context.add_background_job(Job {
                         id: self.context.background_jobs.len() + 1,
-                        command: format!("{} {}", cmd_name, args.join(" ")),
+                        command: format!("{} {}", path.display(), args.join(" ")),
                         child,
                     });
                     Ok(ShouldExit::Continue)
@@ -211,7 +206,7 @@ impl Shell {
     fn execute_pipeline(&mut self, pipeline: Pipeline) -> Result<ShouldExit, ShellError> {
         let mut children: Vec<Child> = Vec::new();
         let mut previous_stdout: Option<std::process::ChildStdout> = None;
-
+        let mut previous_output: Option<Vec<u8>> = None;
         let num = pipeline.commands.len();
 
         for (i, cmd) in pipeline.commands.iter().enumerate() {
@@ -222,6 +217,60 @@ impl Shell {
                 is_background: _,
             } = cmd;
 
+            let is_builtin = self.builtins.contains_key(name);
+            let is_last = i == num - 1;
+
+            // ─── 内建命令处理 ─────────────────────────────
+            if is_builtin {
+                let builtin = self.builtins.get(name).unwrap();
+
+                // 需要输入的内建命令暂不支持放入管道
+                if builtin.needs_stdin() {
+                    return Err(ShellError::BuiltinError(format!(
+                        "{}: cannot pipe input to builtin command",
+                        name
+                    )));
+                }
+
+                // 处理 stdout 重定向：检查该命令是否有 > 或 >>
+                let stdout_redir = redirects
+                    .iter()
+                    .any(|r| matches!(r, Redirection::Overwrite(_) | Redirection::Append(_)));
+
+                // 捕获内建命令的标准输出
+                let mut output_buf = Cursor::new(Vec::new());
+                match builtin.execute(args, &mut self.context, &mut output_buf) {
+                    Ok(ShouldExit::Continue) => {}
+                    Ok(ShouldExit::Exit) => {
+                        return Ok(ShouldExit::Exit);
+                    }
+                    Err(e) => {
+                        // 错误写入终端 stderr（与 execute_command 行为一致）
+                        // 暂不考虑管道中内建命令的 stderr 重定向
+                        eprintln!("{}", e);
+                    }
+                }
+
+                let data = output_buf.into_inner();
+
+                if stdout_redir {
+                    // 应用重定向：将数据写入文件，不再映射到 previous_output
+                    if let Err(e) = apply_builtin_stdout_redirect(&data, redirects) {
+                        eprintln!("{}", e);
+                    }
+                    // 有重定向后，数据不向后传递，后续命令若无其他输入则继承终端
+                } else if is_last {
+                    io::stdout().write_all(&data)?;
+                } else {
+                    // 非最后一个且无重定向：暂存数据，供下一个命令（应为外部命令）使用
+                    previous_output = Some(data);
+                }
+
+                continue;
+            }
+
+            // ─── 外部命令处理 ─────────────────────────────
+            // 1. 路径查找（复用 ShellContext 缓存）
             let path = self
                 .context
                 .resolve_cmd(name)
@@ -230,19 +279,16 @@ impl Shell {
             let mut command = Command::new(&path);
             command.args(args);
 
-            // ----- 处理标准输出 -----
+            // 2. 处理 stdout 重定向（复用 execute_command 中的 apply_stdout_redirect）
             let stdout_redir = redirects
                 .iter()
                 .any(|r| matches!(r, Redirection::Overwrite(_) | Redirection::Append(_)));
-
-            if i == num - 1 {
-                // 最后一个命令：若无重定向，则 stdout 继承
+            if is_last {
                 if stdout_redir {
                     apply_stdout_redirect(&mut command, redirects)?;
                 }
-                // 否则保持 inherit
+                // 否则 stdout 默认 inherit
             } else {
-                // 非最后一个命令：若无重定向，则 stdout 为 piped
                 if stdout_redir {
                     apply_stdout_redirect(&mut command, redirects)?;
                 } else {
@@ -250,22 +296,25 @@ impl Shell {
                 }
             }
 
-            // ----- 处理标准输入 -----
+            // 3. 处理 stdin
+            //    考虑三种可能：① 第一个命令  ② 前一个外部命令有管道  ③ 前一个内建命令有数据
+            let prev_data = previous_output.take();
             if i == 0 {
-                // 第一个命令：stdin 继承
                 command.stdin(Stdio::inherit());
+            } else if prev_data.is_some() {
+                // 前一个命令是内建命令：需要写入数据，先设 stdin 为 piped
+                command.stdin(Stdio::piped());
             } else if let Some(prev_stdout) = previous_stdout.take() {
-                // 使用前一个命令的 stdout 作为 stdin
+                // 前一个命令是外部命令且有管道 stdout
                 command.stdin(prev_stdout);
             } else {
-                // 前一个命令 stdout 被重定向等情况，stdin 继承
                 command.stdin(Stdio::inherit());
             }
 
-            // stderr 统一继承
+            // stderr 保持继承
             command.stderr(Stdio::inherit());
 
-            // 生成子进程
+            // 4. 启动子进程
             let mut child = command.spawn().map_err(|e| {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     ShellError::CommandNotFound(name.clone())
@@ -274,8 +323,15 @@ impl Shell {
                 }
             })?;
 
-            // 如果不是最后一个命令且 stdout 被 piped，取出 pipe 的 stdout 供下一个命令使用
-            if i != num - 1 && !stdout_redir {
+            // 5. 如果有来自内建命令的数据，写入子进程的 stdin 并关闭
+            if let Some(data) = prev_data
+                && let Some(mut stdin) = child.stdin.take() {
+                    stdin.write_all(&data)?;
+                    // stdin 自动 drop，关闭管道
+                }
+
+            // 6. 如果不是最后一个命令且 stdout 未被重定向，保存 stdout 管道供下一个命令使用
+            if !is_last && !stdout_redir {
                 previous_stdout = child.stdout.take();
             }
 
@@ -341,6 +397,32 @@ fn apply_stdout_redirect(
         .map_err(|_e| ShellError::BuiltinError(format!("{}: cannot open", file)))?;
         command.stdout(file);
         break; // 只应用最后一个 stdout 重定向（POSIX 语义）
+    }
+    Ok(())
+}
+
+/// 辅助函数：将内建命令的输出应用重定向写入文件
+fn apply_builtin_stdout_redirect(data: &[u8], redirects: &[Redirection]) -> Result<(), ShellError> {
+    let target = redirects
+        .iter()
+        .rev()
+        .find(|r| matches!(r, Redirection::Overwrite(_) | Redirection::Append(_)));
+    if let Some(redir) = target {
+        let (filename, append) = match redir {
+            Redirection::Overwrite(f) => (f, false),
+            Redirection::Append(f) => (f, true),
+            _ => unreachable!(),
+        };
+        let mut file = if append {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(filename)
+        } else {
+            std::fs::File::create(filename)
+        }
+        .map_err(|e| ShellError::BuiltinError(format!("{}: cannot open: {}", filename, e)))?;
+        file.write_all(data)?;
     }
     Ok(())
 }
