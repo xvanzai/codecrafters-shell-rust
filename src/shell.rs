@@ -30,6 +30,7 @@ impl Shell {
             Box::new(builtins::CdBuiltin),
             Box::new(builtins::CompleteBuiltin),
             Box::new(builtins::JobsBuiltin),
+            Box::new(builtins::HistoryBuiltin),
         ];
 
         for builtin in cmd_list {
@@ -325,10 +326,11 @@ impl Shell {
 
             // 5. 如果有来自内建命令的数据，写入子进程的 stdin 并关闭
             if let Some(data) = prev_data
-                && let Some(mut stdin) = child.stdin.take() {
-                    stdin.write_all(&data)?;
-                    // stdin 自动 drop，关闭管道
-                }
+                && let Some(mut stdin) = child.stdin.take()
+            {
+                stdin.write_all(&data)?;
+                // stdin 自动 drop，关闭管道
+            }
 
             // 6. 如果不是最后一个命令且 stdout 未被重定向，保存 stdout 管道供下一个命令使用
             if !is_last && !stdout_redir {

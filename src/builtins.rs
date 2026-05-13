@@ -30,6 +30,7 @@ pub mod cd;
 pub mod complete;
 pub mod echo;
 pub mod exit;
+pub mod history;
 pub mod jobs;
 pub mod pwd;
 #[path = "builtins/type.rs"]
@@ -40,6 +41,7 @@ pub use cd::CdBuiltin;
 pub use complete::CompleteBuiltin;
 pub use echo::EchoBuiltin;
 pub use exit::ExitBuiltin;
+pub use history::HistoryBuiltin;
 pub use jobs::JobsBuiltin;
 pub use pwd::PwdBuiltin;
 pub use type_cmd::TypeBuiltin;
