@@ -13,7 +13,9 @@ pub struct ShellContext {
     /// 供 type 等命令判断是否内建
     pub builtin_names: Vec<String>,
     pub complete_command: Rc<RefCell<HashMap<String, String>>>,
-    pub background_jobs: Vec<Job>, // 存储后台作业的句柄
+    pub background_jobs: Vec<Job>,    // 存储后台作业的句柄
+    pub history_entries: Vec<String>, // 同步后的历史记录
+    pub request_clear_history: bool,  // 是否请求清除历史
 }
 
 impl ShellContext {
@@ -24,6 +26,8 @@ impl ShellContext {
             builtin_names: Vec::new(),
             complete_command: Rc::new(RefCell::new(HashMap::new())),
             background_jobs: Vec::new(),
+            history_entries: Vec::new(),
+            request_clear_history: false,
         }
     }
 

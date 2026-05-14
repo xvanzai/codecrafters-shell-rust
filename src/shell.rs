@@ -3,6 +3,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Cursor, Write};
 use std::process::{Child, Command, Stdio};
 
+use rustyline::history::History;
+
 use crate::builtins::jobs::Job;
 use crate::builtins::{self, Builtin, ShouldExit};
 use crate::completer::{ShellHelper, create_editor_with_helper};
@@ -13,7 +15,7 @@ use crate::parser::{self, ParsedCommand, Pipeline, Redirection};
 pub struct Shell {
     builtins: HashMap<String, Box<dyn Builtin>>,
     context: ShellContext,
-    editor: rustyline::Editor<ShellHelper, rustyline::history::DefaultHistory>,
+    editor: rustyline::Editor<ShellHelper, rustyline::history::FileHistory>,
 }
 
 impl Shell {
@@ -40,7 +42,9 @@ impl Shell {
         }
 
         // 创建编辑器并绑定补全器
-        let editor = create_editor_with_helper(&context);
+        let mut editor = create_editor_with_helper(&context);
+        // 加载历史文件（忽略错误）
+        let _ = editor.load_history(".shell_history");
 
         Shell {
             builtins,
@@ -51,6 +55,14 @@ impl Shell {
 
     pub fn run(&mut self) -> Result<(), ShellError> {
         loop {
+            // 同步历史记录（不含当前输入）
+            self.context.history_entries = self
+                .editor
+                .history()
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+
             self.context
                 .print_background_jobs_is_done(&mut io::stdout())?;
 
@@ -63,6 +75,9 @@ impl Shell {
                     if trimmed.is_empty() {
                         continue;
                     }
+
+                    // 立即添加到 rustyline 的内存历史中
+                    let _ = self.editor.add_history_entry(trimmed);
 
                     // 原有输入获取与 trimming 后...
                     let pipeline = if trimmed.contains('|') {
@@ -101,6 +116,15 @@ impl Shell {
                     break;
                 }
             }
+
+            // 处理历史清除请求（由 history -c 触发）
+            if self.context.request_clear_history {
+                let _ = self.editor.history_mut().clear();
+                self.context.history_entries.clear();
+                self.context.request_clear_history = false;
+            }
+
+            let _ = self.editor.save_history(".shell_history"); // 每次循环结束时保存历史，确保持久化最新记录
         }
         Ok(())
     }
