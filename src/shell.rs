@@ -55,14 +55,6 @@ impl Shell {
 
     pub fn run(&mut self) -> Result<(), ShellError> {
         loop {
-            // 同步历史记录（不含当前输入）
-            self.context.history_entries = self
-                .editor
-                .history()
-                .iter()
-                .map(|s| s.to_string())
-                .collect();
-
             self.context
                 .print_background_jobs_is_done(&mut io::stdout())?;
 
@@ -78,6 +70,13 @@ impl Shell {
 
                     // 立即添加到 rustyline 的内存历史中
                     let _ = self.editor.add_history_entry(trimmed);
+                    // 同步历史记录（含当前输入）
+                    self.context.history_entries = self
+                        .editor
+                        .history()
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect();
 
                     // 原有输入获取与 trimming 后...
                     let pipeline = if trimmed.contains('|') {
