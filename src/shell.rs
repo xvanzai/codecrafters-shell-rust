@@ -42,9 +42,9 @@ impl Shell {
         }
 
         // 创建编辑器并绑定补全器
-        let mut editor = create_editor_with_helper(&context);
+        let editor = create_editor_with_helper(&context);
         // 加载历史文件（忽略错误）
-        let _ = editor.load_history(".shell_history");
+        // let _ = editor.load_history(".shell_history");
 
         Shell {
             builtins,
@@ -123,7 +123,7 @@ impl Shell {
                 self.context.request_clear_history = false;
             }
 
-            let _ = self.editor.save_history(".shell_history"); // 每次循环结束时保存历史，确保持久化最新记录
+            // let _ = self.editor.save_history(".shell_history"); // 每次循环结束时保存历史，确保持久化最新记录
         }
         Ok(())
     }
