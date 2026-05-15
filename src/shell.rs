@@ -140,10 +140,10 @@ impl Shell {
             // 处理历史写入文件请求
             if let Some(ref file) = self.context.request_write_history.take() {
                 use std::io::Write;
-                let mut f = std::fs::File::create(file)
-                    .map_err(|e| ShellError::Io(e))?;
+                let mut f = std::fs::File::create(file).map_err(|e| ShellError::Io(e))?;
                 for entry in &self.context.history_entries {
                     writeln!(f, "{}", entry)?;
+                }
             }
 
             // let _ = self.editor.save_history(".shell_history"); // 每次循环结束时保存历史，确保持久化最新记录
