@@ -137,6 +137,11 @@ impl Shell {
                     .collect();
             }
 
+            // 处理历史写入文件请求
+            if let Some(ref file) = self.context.request_write_history.take() {
+                let _ = self.editor.save_history(Path::new(file));
+            }
+
             // let _ = self.editor.save_history(".shell_history"); // 每次循环结束时保存历史，确保持久化最新记录
         }
         Ok(())

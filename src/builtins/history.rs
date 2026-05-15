@@ -15,14 +15,25 @@ impl Builtin for HistoryBuiltin {
     ) -> Result<super::ShouldExit, crate::error::ShellError> {
         match args.first().map(|s| s.as_str()) {
             Some("-c") => {
+                // 删除历史
                 context.request_clear_history = true;
                 return Ok(super::ShouldExit::Continue);
             }
             Some("-r") => {
+                // 从指定文件读取历史（先清空历史）
                 if let Some(file_path) = args.get(1) {
                     context.request_load_history = Some(file_path.clone());
                 } else {
                     writeln!(writer, "history: -r requires a file path argument")?;
+                }
+                return Ok(super::ShouldExit::Continue);
+            }
+            Some("-w") => {
+                // 将历史写入到指定文件
+                if let Some(file_path) = args.get(1) {
+                    context.request_write_history = Some(file_path.clone());
+                } else {
+                    writeln!(writer, "history: -w requires a file path argument")?;
                 }
                 return Ok(super::ShouldExit::Continue);
             }
