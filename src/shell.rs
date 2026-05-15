@@ -126,9 +126,13 @@ impl Shell {
 
             // 处理历史加载请求
             if let Some(ref file) = self.context.request_load_history.take() {
-                self.context.history_entries.clear(); // 清空当前历史记录
-                let _ = self.editor.history_mut().append(Path::new(file)); // 加载文件内容到内存历史
-                // 同步到 context.history_entries
+                // 1. 清空编辑器内存中的历史
+                let _ = self.editor.history_mut().clear();
+                // 2. 清空 context 快照
+                self.context.history_entries.clear();
+                // 3. 从文件加载历史（忽略错误，如文件不存在）
+                let _ = self.editor.history_mut().load(Path::new(file));
+                // 4. 同步到 context
                 self.context.history_entries = self
                     .editor
                     .history()
