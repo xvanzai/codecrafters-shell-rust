@@ -11,12 +11,22 @@ impl Builtin for HistoryBuiltin {
         &self,
         args: &[String],
         context: &mut crate::context::ShellContext,
-        writer: &mut dyn std::io::prelude::Write,
+        writer: &mut dyn std::io::Write,
     ) -> Result<super::ShouldExit, crate::error::ShellError> {
-        // -c 清除历史
-        if args.first().map(|s| s.as_str()) == Some("-c") {
-            context.request_clear_history = true;
-            return Ok(super::ShouldExit::Continue);
+        match args.first().map(|s| s.as_str()) {
+            Some("-c") => {
+                context.request_clear_history = true;
+                return Ok(super::ShouldExit::Continue);
+            }
+            Some("-r") => {
+                if let Some(file_path) = args.get(1) {
+                    context.request_load_history = Some(file_path.clone());
+                } else {
+                    writeln!(writer, "history: -r requires a file path argument")?;
+                }
+                return Ok(super::ShouldExit::Continue);
+            }
+            _ => {} // 其他情况包括数字或空
         }
 
         let entries = &context.history_entries;
@@ -27,7 +37,7 @@ impl Builtin for HistoryBuiltin {
                 let start = total.saturating_sub(n); // 若 n > total，则 start = 0
                 &entries[start..]
             }
-            None => &entries[..], // 无参数或参数不是数字，显示全部
+            None => &entries[..],
         };
 
         // 输出带编号的历史

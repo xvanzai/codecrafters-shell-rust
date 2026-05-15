@@ -13,9 +13,10 @@ pub struct ShellContext {
     /// 供 type 等命令判断是否内建
     pub builtin_names: Vec<String>,
     pub complete_command: Rc<RefCell<HashMap<String, String>>>,
-    pub background_jobs: Vec<Job>,    // 存储后台作业的句柄
-    pub history_entries: Vec<String>, // 同步后的历史记录
-    pub request_clear_history: bool,  // 是否请求清除历史
+    pub background_jobs: Vec<Job>,            // 存储后台作业的句柄
+    pub history_entries: Vec<String>,         // 同步后的历史记录
+    pub request_clear_history: bool,          // 是否请求清除历史
+    pub request_load_history: Option<String>, // 请求加载历史的文件路径
 }
 
 impl ShellContext {
@@ -28,6 +29,7 @@ impl ShellContext {
             background_jobs: Vec::new(),
             history_entries: Vec::new(),
             request_clear_history: false,
+            request_load_history: None,
         }
     }
 

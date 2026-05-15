@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Cursor, Write};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
 use rustyline::history::History;
@@ -121,6 +122,18 @@ impl Shell {
                 let _ = self.editor.history_mut().clear();
                 self.context.history_entries.clear();
                 self.context.request_clear_history = false;
+            }
+
+            // 处理历史加载请求
+            if let Some(ref file) = self.context.request_load_history.take() {
+                let _ = self.editor.history_mut().append(Path::new(file)); // 加载文件内容到内存历史
+                // 同步到 context.history_entries
+                self.context.history_entries = self
+                    .editor
+                    .history()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect();
             }
 
             // let _ = self.editor.save_history(".shell_history"); // 每次循环结束时保存历史，确保持久化最新记录
